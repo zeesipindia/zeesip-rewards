@@ -82,11 +82,14 @@ export default function LandingPage() {
       body: JSON.stringify({ event_type: 'GOOGLE_AUTH_STARTED' }),
     }).catch(() => {});
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const redirectTo = `${siteUrl.replace(/\/+$/, '')}/auth/callback`;
+
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: redirectTo,
       },
     });
 

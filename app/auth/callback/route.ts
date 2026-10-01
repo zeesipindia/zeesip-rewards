@@ -5,7 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function GET(req: NextRequest) {
   const requestUrl = new URL(req.url);
   const code = requestUrl.searchParams.get('code');
-  const origin = requestUrl.origin;
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+  const baseUrl = siteUrl.replace(/\/+$/, '');
 
   if (code) {
     const supabase = await createClient();
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
           { user_id: user.id, event_type: 'GOOGLE_AUTH_COMPLETED' },
         ]);
 
-        return NextResponse.redirect(`${origin}/profile`);
+        return NextResponse.redirect(`${baseUrl}/profile`);
       }
 
       // Log LOGIN event
@@ -48,12 +50,12 @@ export async function GET(req: NextRequest) {
 
       // If profile is missing phone or team, redirect to /profile
       if (!profile.phone_number || !profile.team) {
-        return NextResponse.redirect(`${origin}/profile`);
+        return NextResponse.redirect(`${baseUrl}/profile`);
       }
 
-      return NextResponse.redirect(`${origin}/home`);
+      return NextResponse.redirect(`${baseUrl}/home`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/`);
+  return NextResponse.redirect(`${baseUrl}/`);
 }
