@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -31,6 +32,7 @@ export default function HomePage() {
   const [isAddressDone, setIsAddressDone] = useState<boolean>(false);
   const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
   const [isSpinDoneToday, setIsSpinDoneToday] = useState<boolean>(false);
+  const [isThreeSipsDoneToday, setIsThreeSipsDoneToday] = useState<boolean>(false);
   const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function HomePage() {
       // Prefetch routes for fast navigation
       router.prefetch('/profile');
       router.prefetch('/play');
+      router.prefetch('/play/three-sips');
       router.prefetch('/rewards');
 
       // Fetch profile & check tasks
@@ -83,7 +86,7 @@ export default function HomePage() {
         })
         .catch(() => setBalance(0));
 
-      // Fetch today's spin check & today's coins
+      // Fetch today's activities & check tasks
       const todayStr = new Date().toISOString().split('T')[0];
 
       supabase
@@ -107,6 +110,19 @@ export default function HomePage() {
               (item) => item.source === 'DAILY_SPIN' && item.created_at.startsWith(todayStr)
             );
             setIsSpinDoneToday(spunToday);
+          }
+        });
+
+      // Check if Three Sips played today
+      supabase
+        .from('game_plays')
+        .select('played_at')
+        .eq('user_id', user.id)
+        .eq('game_type', 'three_sips')
+        .gte('played_at', `${todayStr}T00:00:00.000Z`)
+        .then(({ data: plays }) => {
+          if (plays && plays.length > 0) {
+            setIsThreeSipsDoneToday(true);
           }
         });
     });
@@ -136,8 +152,18 @@ export default function HomePage() {
 
         {/* Main Content */}
         <div className="px-5 -mt-6 flex flex-col gap-5 relative z-10">
-          {/* RED "YOUR SIP COINS" CARD */}
+          {/* RED "YOUR SIP COINS" CARD WITH WATERMARK */}
           <div className="w-full bg-[#B92429] text-white rounded-[24px] p-5 shadow-xl relative overflow-hidden">
+            {/* Logo Watermark: opacity 0.15, absolute right: -20px, bottom: -20px, width: 160px, height: 160px */}
+            <img
+              src="/zeesip-logo.png"
+              alt="Zee Sip Logo Watermark"
+              width={160}
+              height={160}
+              style={{ opacity: 0.15, borderRadius: '50%', objectFit: 'cover' }}
+              className="absolute -right-[20px] -bottom-[20px] pointer-events-none"
+            />
+
             {/* Header: Label + HISTORY Link */}
             <div className="flex items-center justify-between z-10 relative">
               <span className="text-[11px] font-extrabold text-white/80 tracking-widest uppercase">
@@ -310,7 +336,38 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 5: Scan a Zee Sip bottle */}
+              {/* Task 5: Play Three Sips */}
+              <Link
+                href="/play/three-sips"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isThreeSipsDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isThreeSipsDoneToday
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isThreeSipsDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Play Three Sips
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isThreeSipsDoneToday ? 'Done today ✓' : 'Slot machine game'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              {/* Task 6: Scan a Zee Sip bottle */}
               <button
                 type="button"
                 onClick={handleBottleScanClick}

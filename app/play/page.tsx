@@ -12,6 +12,8 @@ import { createClient } from '@/lib/supabase/client';
 export default function PlayPage() {
   const [balance, setBalance] = useState<number>(0);
   const [isSpunToday, setIsSpunToday] = useState<boolean>(false);
+  const [isThreeSipsDoneToday, setIsThreeSipsDoneToday] = useState<boolean>(false);
+  const [threeSipsCoinsWon, setThreeSipsCoinsWon] = useState<number>(0);
   const [countdown, setCountdown] = useState<string>('');
   const [isSpinModalOpen, setIsSpinModalOpen] = useState<boolean>(false);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
@@ -35,9 +37,9 @@ export default function PlayPage() {
           if (data.balance !== undefined) setBalance(data.balance);
         });
 
-      // Check if daily spin done today
       const todayStr = new Date().toISOString().split('T')[0];
 
+      // Check if daily spin done today
       supabase
         .from('coin_ledger')
         .select('created_at')
@@ -47,6 +49,22 @@ export default function PlayPage() {
         .then(({ data: spins }) => {
           if (spins && spins.length > 0) {
             setIsSpunToday(true);
+          }
+        });
+
+      // Check if Three Sips played today
+      supabase
+        .from('game_plays')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('game_type', 'three_sips')
+        .gte('played_at', `${todayStr}T00:00:00.000Z`)
+        .order('played_at', { ascending: false })
+        .limit(1)
+        .then(({ data: plays }) => {
+          if (plays && plays.length > 0) {
+            setIsThreeSipsDoneToday(true);
+            setThreeSipsCoinsWon(plays[0].coins_won);
           }
         });
 
@@ -75,7 +93,6 @@ export default function PlayPage() {
     // Countdown timer to midnight IST
     const updateCountdown = () => {
       const now = new Date();
-      // IST offset +5:30
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       const istDate = new Date(utc + 3600000 * 5.5);
 
@@ -209,6 +226,35 @@ export default function PlayPage() {
             </h2>
 
             <div className="grid grid-cols-2 gap-3">
+              {/* Three Sips (LIVE GAME) */}
+              <Link
+                href="/play/three-sips"
+                className="bg-white rounded-[20px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[120px] text-left hover:border-[#B92429] transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-[14px] bg-[#FFE14D] flex items-center justify-center text-[#3D0B0E]">
+                    <SlotsIcon size={22} />
+                  </div>
+                  {isThreeSipsDoneToday ? (
+                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px]">
+                      Done ✓
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-[#FFC93C] text-[#3D0B0E] font-anton text-[11px]">
+                      PLAY
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-anton text-[16px] text-[#3D0B0E] leading-none uppercase">
+                    THREE SIPS
+                  </span>
+                  <span className="text-[10px] font-bold text-[#7A4547] mt-1">
+                    {isThreeSipsDoneToday ? `Won +${threeSipsCoinsWon} coins` : 'Match 3 & win'}
+                  </span>
+                </div>
+              </Link>
+
               {/* Scan a Bottle */}
               <button
                 onClick={() => handleComingSoon('Scan a Bottle')}
@@ -274,29 +320,6 @@ export default function PlayPage() {
                   </span>
                   <span className="text-[10px] font-bold text-[#7A4547] mt-1">
                     Scratch & reveal
-                  </span>
-                </div>
-              </button>
-
-              {/* Three Sips */}
-              <button
-                onClick={() => handleComingSoon('Three Sips')}
-                className="bg-white rounded-[20px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[120px] text-left hover:border-[#B92429] cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-[14px] bg-[#FFE14D]/40 flex items-center justify-center text-[#3D0B0E]">
-                    <SlotsIcon size={22} />
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[11px]">
-                    up to +50
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-anton text-[16px] text-[#3D0B0E] leading-none uppercase">
-                    THREE SIPS
-                  </span>
-                  <span className="text-[10px] font-bold text-[#7A4547] mt-1">
-                    Slot match game
                   </span>
                 </div>
               </button>
