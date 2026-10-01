@@ -74,12 +74,6 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
           }}
         >
           <svg viewBox="0 0 200 200" className="w-full h-full overflow-visible">
-            <defs>
-              <clipPath id="hubClip">
-                <circle cx="100" cy="100" r="26" />
-              </clipPath>
-            </defs>
-
             {/* White Outer Rim */}
             <circle cx="100" cy="100" r="99" fill="#FFFFFF" stroke="#3D0B0E" strokeWidth="3" />
             <circle cx="100" cy="100" r="88" fill="none" stroke="#3D0B0E" strokeWidth="2" />
@@ -129,9 +123,16 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
               );
             })}
 
-            {/* Centre Hub with Zee Sip Logo */}
+            {/* Centre Hub */}
             <circle cx="100" cy="100" r="28" fill="#B92429" stroke="#3D0B0E" strokeWidth="3" />
-            <image href="/zeesip-logo.png" x="74" y="74" width="52" height="52" clipPath="url(#hubClip)" />
+            <circle cx="100" cy="100" r="24" fill="none" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.6" />
+            {/* Gold 4-pointed star in hub */}
+            <path
+              d="M100 86 C100 94 94 100 86 100 C94 100 100 106 100 114 C100 106 106 100 114 100 C106 100 100 94 100 86 Z"
+              fill="#FFC93C"
+              stroke="#3D0B0E"
+              strokeWidth="1"
+            />
           </svg>
         </div>
       </div>

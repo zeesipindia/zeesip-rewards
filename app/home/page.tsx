@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -113,10 +114,15 @@ export default function HomePage() {
         <div className="px-5 -mt-6 flex flex-col gap-4 relative z-10">
           {/* COIN CARD (Brand-red bg, white text) */}
           <div className="w-full bg-[#B92429] text-white rounded-[24px] p-5 shadow-xl relative overflow-hidden">
-            {/* Faint Coin Watermark in Corner */}
-            <div className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none">
-              <CoinIcon size={160} />
-            </div>
+            {/* Right Side: Faint Zee Sip Logo Watermark */}
+            <img
+              src="/zeesip-logo.png"
+              alt="Zee Sip Logo Watermark"
+              width={160}
+              height={160}
+              style={{ borderRadius: '50%', objectFit: 'cover' }}
+              className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none"
+            />
 
             {/* Card Header: Label + HISTORY Link */}
             <div className="flex items-center justify-between z-10 relative">
@@ -131,9 +137,9 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Balance Hero */}
+            {/* Balance Hero: Left side small gold coin SVG (size ~44px) + number */}
             <div className="flex items-center gap-3 my-3 z-10 relative">
-              <CoinIcon size={56} />
+              <CoinIcon size={44} />
               {balance === null ? (
                 <div className="h-16 w-32 bg-white/20 rounded-lg animate-pulse" />
               ) : (
