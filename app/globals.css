@@ -38,6 +38,15 @@
     }
   }
 
+  @keyframes reelSpin {
+    0% {
+      transform: translateY(0px);
+    }
+    100% {
+      transform: translateY(-540px);
+    }
+  }
+
   .animate-spin-slow {
     animation: spinSlow 30s linear infinite;
   }
@@ -45,11 +54,17 @@
   .animate-float {
     animation: floatSlow 3s ease-in-out infinite;
   }
+
+  .animate-reel-spin {
+    animation: reelSpin 0.3s linear infinite;
+    will-change: transform;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-spin-slow,
   .animate-float,
+  .animate-reel-spin,
   .wheel-spinning {
     animation: none !important;
     transition: none !important;

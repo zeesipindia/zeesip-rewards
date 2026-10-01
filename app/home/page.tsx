@@ -33,6 +33,8 @@ export default function HomePage() {
   const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
   const [isSpinDoneToday, setIsSpinDoneToday] = useState<boolean>(false);
   const [isThreeSipsDoneToday, setIsThreeSipsDoneToday] = useState<boolean>(false);
+  const [isKulkkiDoneToday, setIsKulkkiDoneToday] = useState<boolean>(false);
+  const [isScratchDoneToday, setIsScratchDoneToday] = useState<boolean>(false);
   const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
   useEffect(() => {
@@ -46,10 +48,12 @@ export default function HomePage() {
 
       setUserName(user.user_metadata?.full_name?.split(' ')[0] || 'Sipper');
 
-      // Prefetch routes for fast navigation
+      // Prefetch routes
       router.prefetch('/profile');
       router.prefetch('/play');
       router.prefetch('/play/three-sips');
+      router.prefetch('/play/pick-kulkki');
+      router.prefetch('/play/scratch');
       router.prefetch('/rewards');
 
       // Fetch profile & check tasks
@@ -97,7 +101,7 @@ export default function HomePage() {
         .then(({ data: ledger }) => {
           if (ledger) {
             setHistoryEntries(ledger as HistoryEntry[]);
-            
+
             // Calculate coins earned today
             const todayEntries = ledger.filter(
               (item) => item.created_at.startsWith(todayStr) && item.amount > 0
@@ -113,16 +117,17 @@ export default function HomePage() {
           }
         });
 
-      // Check if Three Sips played today
+      // Check daily game plays today
       supabase
         .from('game_plays')
-        .select('played_at')
+        .select('game_type, played_at')
         .eq('user_id', user.id)
-        .eq('game_type', 'three_sips')
         .gte('played_at', `${todayStr}T00:00:00.000Z`)
         .then(({ data: plays }) => {
-          if (plays && plays.length > 0) {
-            setIsThreeSipsDoneToday(true);
+          if (plays) {
+            setIsThreeSipsDoneToday(plays.some((p) => p.game_type === 'three_sips'));
+            setIsKulkkiDoneToday(plays.some((p) => p.game_type === 'pick_kulkki'));
+            setIsScratchDoneToday(plays.some((p) => p.game_type === 'scratch'));
           }
         });
     });
@@ -132,7 +137,7 @@ export default function HomePage() {
   const remainingCoins = Math.max(0, target - currentBalance);
 
   const handleBottleScanClick = () => {
-    alert('Bottle Verification is unlocking in Phase 2! Stay tuned.');
+    router.push('/verify');
   };
 
   return (
@@ -154,7 +159,7 @@ export default function HomePage() {
         <div className="px-5 -mt-6 flex flex-col gap-5 relative z-10">
           {/* RED "YOUR SIP COINS" CARD WITH WATERMARK */}
           <div className="w-full bg-[#B92429] text-white rounded-[24px] p-5 shadow-xl relative overflow-hidden">
-            {/* Logo Watermark: opacity 0.15, absolute right: -20px, bottom: -20px, width: 160px, height: 160px */}
+            {/* Logo Watermark */}
             <img
               src="/zeesip-logo.png"
               alt="Zee Sip Logo Watermark"
@@ -367,7 +372,69 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 6: Scan a Zee Sip bottle */}
+              {/* Task 6: Pick the Kulkki */}
+              <Link
+                href="/play/pick-kulkki"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isKulkkiDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isKulkkiDoneToday
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isKulkkiDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Pick the Kulkki
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isKulkkiDoneToday ? 'Done today ✓' : 'Bottle shuffle game'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +25
+                </span>
+              </Link>
+
+              {/* Task 7: Scratch Your Sip */}
+              <Link
+                href="/play/scratch"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isScratchDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isScratchDoneToday
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isScratchDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Scratch Your Sip
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isScratchDoneToday ? 'Done today ✓' : 'Digital scratch card'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              {/* Task 8: Scan a Zee Sip bottle */}
               <button
                 type="button"
                 onClick={handleBottleScanClick}

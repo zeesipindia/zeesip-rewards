@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import React from 'react';
 
 interface HeaderProps {
@@ -19,14 +18,6 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className={`w-full flex items-center justify-between gap-3 px-5 py-3 ${className}`}>
       <div className="flex-1 flex items-center gap-2">
-        <img
-          src="/zeesip-logo.png"
-          alt="Zee Sip"
-          width={28}
-          height={28}
-          style={{ borderRadius: '50%', objectFit: 'cover' }}
-          className="shrink-0"
-        />
         <span className={`font-extrabold text-[13px] tracking-[0.06em] uppercase whitespace-nowrap ${textColor}`}>
           ZEESIP
         </span>
