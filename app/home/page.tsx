@@ -20,10 +20,9 @@ export default function HomePage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>('Sipper');
   const [userTeam, setUserTeam] = useState<string>('mango');
-  const [balance, setBalance] = useState<number>(0);
-  const [target, setTarget] = useState<number>(250);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [target] = useState<number>(250);
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
 
@@ -55,23 +54,22 @@ export default function HomePage() {
             // If profile is incomplete, redirect to /profile
             if (!profile.phone_number || !profile.team) {
               router.push('/profile');
-              return;
             }
           }
         });
 
-      // Fetch balance from API
+      // Fetch balance from API asynchronously
       fetch('/api/balance')
         .then((res) => res.json())
         .then((data) => {
           if (data.balance !== undefined) {
             setBalance(data.balance);
-            setTarget(data.target || 250);
             setProgressPercent(data.progress_percent || 0);
+          } else {
+            setBalance(0);
           }
-          setIsLoading(false);
         })
-        .catch(() => setIsLoading(false));
+        .catch(() => setBalance(0));
 
       // Fetch history entries
       supabase
@@ -85,15 +83,8 @@ export default function HomePage() {
     });
   }, [router]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] w-full bg-[#FFF5F3] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#B92429] border-t-transparent" />
-      </div>
-    );
-  }
-
-  const remainingCoins = Math.max(0, target - balance);
+  const currentBalance = balance ?? 50; // Optimistic initial fallback
+  const remainingCoins = Math.max(0, target - currentBalance);
 
   return (
     <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
@@ -143,9 +134,13 @@ export default function HomePage() {
             {/* Balance Hero */}
             <div className="flex items-center gap-3 my-3 z-10 relative">
               <CoinIcon size={56} />
-              <span className="text-[72px] font-anton text-[#FFC93C] leading-none tracking-tight">
-                {balance}
-              </span>
+              {balance === null ? (
+                <div className="h-16 w-32 bg-white/20 rounded-lg animate-pulse" />
+              ) : (
+                <span className="text-[72px] font-anton text-[#FFC93C] leading-none tracking-tight">
+                  {balance}
+                </span>
+              )}
             </div>
 
             {/* Progress Bar */}

@@ -29,6 +29,9 @@ export default function ProfilePage() {
       setUserEmail(user.email || '');
       setDisplayName(user.user_metadata?.full_name || user.user_metadata?.name || '');
 
+      // Prefetch home page for instant navigation
+      router.prefetch('/home');
+
       // Check if profile already exists
       supabase
         .from('profiles')
@@ -56,6 +59,8 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     setErrorMsg(null);
 
     // Validation
@@ -112,8 +117,14 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] w-full bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#B92429] border-t-transparent" />
+      <div className="min-h-[100dvh] w-full bg-white flex flex-col justify-between p-6">
+        <Header variant="red" />
+        <div className="my-auto flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-[#B92429] border-t-transparent rounded-full animate-spin" />
+          <p className="font-anton text-lg text-[#B92429] uppercase tracking-wide">
+            Loading profile...
+          </p>
+        </div>
       </div>
     );
   }
@@ -281,9 +292,16 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-[62px] bg-[#B92429] hover:bg-[#7A1418] active:scale-[0.98] text-white font-anton text-[24px] uppercase rounded-[18px] shadow-[0_10px_22px_rgba(185,36,41,0.3)] transition-all mt-2 cursor-pointer disabled:opacity-75"
+            className="w-full h-[62px] bg-[#B92429] hover:bg-[#7A1418] active:scale-[0.98] text-white font-anton text-[24px] uppercase rounded-[18px] shadow-[0_10px_22px_rgba(185,36,41,0.3)] transition-all mt-2 cursor-pointer disabled:opacity-75 flex items-center justify-center gap-2"
           >
-            {isSubmitting ? 'SAVING PROFILE...' : 'START COLLECTING'}
+            {isSubmitting ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>SAVING PROFILE...</span>
+              </>
+            ) : (
+              'START COLLECTING'
+            )}
           </button>
         </form>
       </div>

@@ -28,9 +28,9 @@ export const metadata: Metadata = {
   title: "Zee Sip Rewards",
   description: "Spin, win Sip Coins, and unlock free Zee Sip beverages!",
   icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/zeesip-logo.png",
+    shortcut: "/zeesip-logo.png",
+    apple: "/zeesip-logo.png",
   },
 };
 
@@ -41,6 +41,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${anton.variable} ${montserrat.variable} h-full antialiased`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://ooziftqctxziegrrrmdv.supabase.co" />
+      </head>
       <body className="min-h-full bg-[#3D0B0E] text-[#3D0B0E] flex justify-center items-stretch selection:bg-[#FFC93C] selection:text-[#3D0B0E]">
         <div className="w-full max-w-[390px] min-h-[100dvh] relative flex flex-col shadow-2xl overflow-x-hidden bg-[#FFF5F3]">
           {children}

@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const baseUrl = siteUrl.replace(/\/+$/, '');
 
+  let targetRedirect = `${baseUrl}/`;
+
   if (code) {
     const supabase = await createClient();
     const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code);
@@ -17,7 +19,6 @@ export async function GET(req: NextRequest) {
       const user = session.user;
       const adminSupabase = createAdminClient();
 
-      // Check if profile exists
       const { data: profile } = await adminSupabase
         .from('profiles')
         .select('*')
@@ -25,7 +26,6 @@ export async function GET(req: NextRequest) {
         .single();
 
       if (!profile) {
-        // Create initial profile row
         await adminSupabase.from('profiles').insert({
           id: user.id,
           display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Zee Sipper',
@@ -33,29 +33,99 @@ export async function GET(req: NextRequest) {
           avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         });
 
-        // Log ACCOUNT_CREATED & GOOGLE_AUTH_COMPLETED events
         await adminSupabase.from('events').insert([
           { user_id: user.id, event_type: 'ACCOUNT_CREATED' },
           { user_id: user.id, event_type: 'GOOGLE_AUTH_COMPLETED' },
         ]);
 
-        return NextResponse.redirect(`${baseUrl}/profile`);
+        targetRedirect = `${baseUrl}/profile`;
+      } else {
+        await adminSupabase.from('events').insert({
+          user_id: user.id,
+          event_type: 'LOGIN',
+        });
+
+        if (!profile.phone_number || !profile.team) {
+          targetRedirect = `${baseUrl}/profile`;
+        } else {
+          targetRedirect = `${baseUrl}/home`;
+        }
       }
-
-      // Log LOGIN event
-      await adminSupabase.from('events').insert({
-        user_id: user.id,
-        event_type: 'LOGIN',
-      });
-
-      // If profile is missing phone or team, redirect to /profile
-      if (!profile.phone_number || !profile.team) {
-        return NextResponse.redirect(`${baseUrl}/profile`);
-      }
-
-      return NextResponse.redirect(`${baseUrl}/home`);
     }
   }
 
-  return NextResponse.redirect(`${baseUrl}/`);
+  // Branded HTML loading page + 307 HTTP redirect
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saving your coins... | Zee Sip Rewards</title>
+  <meta http-equiv="refresh" content="0;url=${targetRedirect}">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #B92429;
+      color: #FFFFFF;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .logo {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      margin-bottom: 20px;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: #FFC93C;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 800;
+      margin: 0;
+      color: #FFC93C;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    p {
+      font-size: 13px;
+      opacity: 0.9;
+      margin-top: 6px;
+    }
+  </style>
+  <script>
+    window.location.replace("${targetRedirect}");
+  </script>
+</head>
+<body>
+  <img src="/zeesip-logo.png" alt="Zee Sip" class="logo" />
+  <div class="spinner"></div>
+  <h2>Saving your coins...</h2>
+  <p>Connecting your Zee Sip Rewards profile</p>
+</body>
+</html>`;
+
+  return new NextResponse(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Location': targetRedirect,
+    },
+    status: 307,
+  });
 }

@@ -4,7 +4,6 @@ interface SpinWheelProps {
   targetIndex?: number | null;
   isSpinning: boolean;
   onSpinComplete?: () => void;
-  disabled?: boolean;
 }
 
 const SEGMENTS = [
@@ -24,7 +23,6 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
 
   useEffect(() => {
     if (isSpinning && targetIndex !== null && targetIndex >= 0) {
-      // Check reduced motion preference
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       
       const segmentAngle = 360 / 5;
@@ -65,16 +63,23 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
         <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[18px] border-t-[#3D0B0E] -mt-[22px]" />
       </div>
 
-      {/* 300px Diameter Spin Wheel Container */}
+      {/* 300px Diameter Spin Wheel Container with will-change: transform */}
       <div className="relative z-10 w-[300px] h-[300px]">
         <div
           className="w-full h-full rounded-full shadow-[0_15px_35px_rgba(0,0,0,0.35)]"
           style={{
             transform: `rotate(${rotation}deg)`,
-            transition: isSpinning ? 'transform 4s cubic-bezier(0.15, 0.9, 0.25, 1)' : 'none',
+            transition: isSpinning ? 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)' : 'none',
+            willChange: 'transform',
           }}
         >
           <svg viewBox="0 0 200 200" className="w-full h-full overflow-visible">
+            <defs>
+              <clipPath id="hubClip">
+                <circle cx="100" cy="100" r="26" />
+              </clipPath>
+            </defs>
+
             {/* White Outer Rim */}
             <circle cx="100" cy="100" r="99" fill="#FFFFFF" stroke="#3D0B0E" strokeWidth="3" />
             <circle cx="100" cy="100" r="88" fill="none" stroke="#3D0B0E" strokeWidth="2" />
@@ -124,16 +129,9 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
               );
             })}
 
-            {/* Centre Hub */}
+            {/* Centre Hub with Zee Sip Logo */}
             <circle cx="100" cy="100" r="28" fill="#B92429" stroke="#3D0B0E" strokeWidth="3" />
-            <circle cx="100" cy="100" r="24" fill="none" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.6" />
-            {/* Gold 4-pointed star in hub */}
-            <path
-              d="M100 86 C100 94 94 100 86 100 C94 100 100 106 100 114 C100 106 106 100 114 100 C106 100 100 94 100 86 Z"
-              fill="#FFC93C"
-              stroke="#3D0B0E"
-              strokeWidth="1"
-            />
+            <image href="/zeesip-logo.png" x="74" y="74" width="52" height="52" clipPath="url(#hubClip)" />
           </svg>
         </div>
       </div>

@@ -16,7 +16,7 @@ export default function LandingPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
 
-  // Check auth session on load
+  // Check auth session on load & prefetch routes
   useEffect(() => {
     const supabase = createClient();
 
@@ -25,6 +25,10 @@ export default function LandingPage() {
         router.push('/home');
       }
     });
+
+    // Prefetch routes for instant navigation
+    router.prefetch('/home');
+    router.prefetch('/profile');
 
     // Log QR_LANDING analytics event
     fetch('/api/events', {
@@ -67,11 +71,12 @@ export default function LandingPage() {
   const handleSpinComplete = () => {
     setTimeout(() => {
       setViewState('win');
-    }, 500);
+    }, 300);
   };
 
   // Handle Google Login / Save Coins click
   const handleGoogleAuth = async () => {
+    if (isAuthLoading) return;
     setIsAuthLoading(true);
     setErrorMsg(null);
 
@@ -109,7 +114,7 @@ export default function LandingPage() {
 
       {/* WIN SCREEN OVERLAY (State on /) */}
       {viewState === 'win' ? (
-        <div className="min-h-[100dvh] w-full flex flex-col justify-between items-center px-6 py-6 bg-[#B92429] relative z-30 animate-fadeIn">
+        <div className="min-h-[100dvh] w-full flex flex-col justify-between items-center px-6 py-6 bg-[#B92429] relative z-30 transition-opacity duration-300 opacity-100">
           {/* Faint Sunburst Rays Background */}
           <div className="absolute inset-0 pointer-events-none opacity-10 flex items-center justify-center">
             <svg viewBox="0 0 200 200" className="w-[500px] h-[500px] animate-spin-slow">
@@ -166,7 +171,7 @@ export default function LandingPage() {
               {/* Progress Bar */}
               <div className="w-full h-3.5 bg-[#FCE4E1] rounded-full overflow-hidden border border-[#F4D2CF]">
                 <div
-                  className="h-full bg-[#B92429] rounded-full transition-all duration-1000"
+                  className="h-full bg-[#B92429] rounded-full transition-all duration-700"
                   style={{ width: `${(wonAmount / 250) * 100}%` }}
                 />
               </div>
@@ -189,11 +194,12 @@ export default function LandingPage() {
               className="w-full h-[64px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[24px] uppercase rounded-[18px] shadow-[0_10px_22px_rgba(255,201,60,0.35)] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
             >
               {isAuthLoading ? (
-                <span>SAVING COINS...</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-[#3D0B0E] border-t-transparent rounded-full animate-spin" />
+                  <span>SAVING COINS...</span>
+                </div>
               ) : (
-                <>
-                  <span>SAVE MY {wonAmount} COINS</span>
-                </>
+                <span>SAVE MY {wonAmount} COINS</span>
               )}
             </button>
 
@@ -213,9 +219,10 @@ export default function LandingPage() {
               rightElement={
                 <button
                   onClick={handleGoogleAuth}
-                  className="font-extrabold text-[12px] text-[#B92429] underline underline-offset-2 hover:text-[#7A1418] cursor-pointer"
+                  disabled={isAuthLoading}
+                  className="font-extrabold text-[12px] text-[#B92429] underline underline-offset-2 hover:text-[#7A1418] cursor-pointer disabled:opacity-50"
                 >
-                  Log in
+                  {isAuthLoading ? 'Connecting...' : 'Log in'}
                 </button>
               }
             />
@@ -241,7 +248,6 @@ export default function LandingPage() {
               targetIndex={targetIndex}
               isSpinning={viewState === 'spinning'}
               onSpinComplete={handleSpinComplete}
-              disabled={viewState === 'spinning'}
             />
           </div>
 
@@ -259,7 +265,14 @@ export default function LandingPage() {
               disabled={viewState === 'spinning'}
               className="w-full h-[64px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[26px] uppercase rounded-[18px] shadow-[0_10px_22px_rgba(255,201,60,0.35)] transition-all flex items-center justify-center cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             >
-              {viewState === 'spinning' ? 'SPINNING...' : 'SPIN NOW'}
+              {viewState === 'spinning' ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 border-3 border-[#3D0B0E] border-t-transparent rounded-full animate-spin" />
+                  <span>SPINNING...</span>
+                </div>
+              ) : (
+                'SPIN NOW'
+              )}
             </button>
 
             <p className="text-[14px] font-extrabold text-white text-center">
