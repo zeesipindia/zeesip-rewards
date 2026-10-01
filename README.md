@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zee Sip Rewards 🥤
 
-## Getting Started
+Temporary "coming soon" landing page and foundation for the **Zee Sip Rewards** platform (Kerala's ₹20 packaged beverage brand featuring Mango Kulki 🥭 and Pineapple Kulki 🍍). Built for ultra-fast performance on mobile data when scanned via bottle QR codes.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🛠️ Local Development
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Prerequisites
+- **Node.js**: `20.x` or newer LTS
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
 
-## Learn More
+2. **Run Development Server**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-To learn more about Next.js, take a look at the following resources:
+3. **Build for Production**
+   ```bash
+   npm run build
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Start Production Server**
+   ```bash
+   npm start
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🚀 Deploying to Render
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This project is configured as a Node.js Web Service on Render using standard configuration or Blueprint (`render.yaml`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Option A: Deploy via Blueprint (`render.yaml`)
+1. Push your repository to GitHub.
+2. Go to the [Render Dashboard](https://dashboard.render.com/) and click **New +** -> **Blueprint**.
+3. Connect your GitHub repository `zeesip-rewards`.
+4. Render will automatically detect `render.yaml` and provision the `zeesip-rewards` Web Service.
+
+### Option B: Manual Web Service Setup
+1. On the Render Dashboard, click **New +** -> **Web Service**.
+2. Connect your GitHub repository `zeesip-rewards`.
+3. Set the following details:
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+4. Add Environment Variable:
+   - `NODE_VERSION`: `20.18.0`
+
+> ⚠️ **IMPORTANT DNS NOTE**  
+> **The `zeesip.com` DNS records must NOT be pointed to Render until the real Spin & Win rewards experience is live.**  
+> Pointing DNS early will cause `zeesip.com` visitors to be temporarily redirected via status `307` to `rewards.zeesip.com` before the main brand website is ready.
+
+---
+
+## 📁 Project Structure
+
+Ready for future features:
+- `app/page.tsx`: Coming soon mobile-first landing page with decorative spin wheel.
+- `middleware.ts`: Temporary host-based redirect (`zeesip.com` -> `rewards.zeesip.com?src=bottle_qr`).
+- Future route structure (`/play`, `/verify`, `/rewards`, `/profile`) can be cleanly added directly inside `app/`.
