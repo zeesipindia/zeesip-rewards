@@ -6,7 +6,7 @@ import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
 import { SpinWheel } from '@/components/SpinWheel';
-import { MiniWheelIcon, CameraIcon, TicketIcon, SlotsIcon } from '@/components/Icons';
+import { MiniWheelIcon, CameraIcon, TicketIcon, SlotsIcon, CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
 
 export default function PlayPage() {
@@ -25,8 +25,12 @@ export default function PlayPage() {
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [spinResult, setSpinResult] = useState<{ value: number; label: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const [incompleteTasks, setIncompleteTasks] = useState<Array<{ id: string; title: string; reward: string; link: string }>>([]);
+  // Profile task completion states
+  const [isProfileDone, setIsProfileDone] = useState<boolean>(false);
+  const [isAddressDone, setIsAddressDone] = useState<boolean>(false);
+  const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -56,7 +60,7 @@ export default function PlayPage() {
           }
         });
 
-      // Check if Three Sips played today
+      // Check Three Sips played today
       supabase
         .from('game_plays')
         .select('*')
@@ -104,25 +108,18 @@ export default function PlayPage() {
           }
         });
 
-      // Check incomplete profile tasks
+      // Check profile tasks completion
       supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single()
         .then(({ data: profile }) => {
-          const tasks = [];
-          if (!profile?.display_name || !profile?.phone_number || !profile?.pincode) {
-            tasks.push({ id: 'profile', title: 'Complete your profile', reward: '+10 coins', link: '/profile' });
+          if (profile) {
+            setIsProfileDone(Boolean(profile.display_name && profile.phone_number && profile.pincode));
+            setIsAddressDone(Boolean(profile.address_line1 && profile.city && profile.state && profile.pincode));
+            setIsTeamDone(Boolean(profile.team));
           }
-          if (!profile?.address_line1 || !profile?.city) {
-            tasks.push({ id: 'address', title: 'Add delivery address', reward: '+10 coins', link: '/profile' });
-          }
-          if (!profile?.team) {
-            tasks.push({ id: 'team', title: 'Pick your team', reward: '+5 coins', link: '/profile' });
-          }
-          tasks.push({ id: 'scan', title: 'Scan a Zee Sip bottle', reward: '+25 coins', link: '/verify' });
-          setIncompleteTasks(tasks);
         });
     });
 
@@ -188,8 +185,22 @@ export default function PlayPage() {
     }, 400);
   };
 
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg(null);
+    }, 3500);
+  };
+
   return (
     <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
+      {/* Toast Notification Popup */}
+      {toastMsg && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
+          {toastMsg}
+        </div>
+      )}
+
       <div>
         {/* Top Header */}
         <div className="w-full bg-[#FFC93C] text-[#3D0B0E] pb-4 border-b-4 border-[#3D0B0E]">
@@ -251,7 +262,7 @@ export default function PlayPage() {
             )}
           </div>
 
-          {/* GAMES SECTION: MORE WAYS TO EARN */}
+          {/* GAMES SECTION: MORE GAMES */}
           <div className="flex flex-col gap-3">
             <h2 className="text-[22px] font-anton text-[#B92429] uppercase tracking-wide">
               MORE GAMES
@@ -268,8 +279,8 @@ export default function PlayPage() {
                     <SlotsIcon size={22} />
                   </div>
                   {isThreeSipsDoneToday ? (
-                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px]">
-                      Done ✓
+                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px] flex items-center gap-1">
+                      <CheckIcon size={10} /> Done
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full bg-[#FFC93C] text-[#3D0B0E] font-anton text-[11px]">
@@ -294,11 +305,13 @@ export default function PlayPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="w-10 h-10 rounded-[14px] bg-[#CDEE1C] flex items-center justify-center text-[#3D0B0E]">
-                    <span className="text-xl">🍾</span>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v4M8 6h8M7 9h10l-1 12H8L7 9z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </div>
                   {isKulkkiDoneToday ? (
-                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px]">
-                      Done ✓
+                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px] flex items-center gap-1">
+                      <CheckIcon size={10} /> Done
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full bg-[#FFC93C] text-[#3D0B0E] font-anton text-[11px]">
@@ -316,7 +329,7 @@ export default function PlayPage() {
                 </div>
               </Link>
 
-              {/* Scratch Your Sip */}
+              {/* Scratch Your Sip (Fix 4 subtitle) */}
               <Link
                 href="/play/scratch"
                 className="bg-white rounded-[20px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[130px] text-left hover:border-[#B92429] transition-all"
@@ -326,8 +339,8 @@ export default function PlayPage() {
                     <TicketIcon size={22} />
                   </div>
                   {isScratchDoneToday ? (
-                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px]">
-                      Done ✓
+                    <span className="px-2 py-0.5 rounded-full bg-[#8FC31F] text-white font-anton text-[11px] flex items-center gap-1">
+                      <CheckIcon size={10} /> Done
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full bg-[#FFC93C] text-[#3D0B0E] font-anton text-[11px]">
@@ -340,64 +353,233 @@ export default function PlayPage() {
                     SCRATCH YOUR SIP
                   </span>
                   <span className="text-[10px] font-bold text-[#7A4547] mt-1">
-                    {isScratchDoneToday ? `Won +${scratchCoinsWon} coins` : 'Scratch & win up to 50'}
+                    {isScratchDoneToday ? `Won +${scratchCoinsWon} coins` : 'Feeling lucky today?'}
                   </span>
                 </div>
               </Link>
 
-              {/* Scan a Bottle */}
-              <Link
-                href="/verify"
-                className="bg-white rounded-[20px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[130px] text-left hover:border-[#B92429] transition-all"
+              {/* Scan a Bottle Card (Fix 5: COMING SOON + Toast) */}
+              <button
+                type="button"
+                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                className="bg-gray-50 opacity-75 rounded-[20px] p-4 shadow-sm border border-gray-200 flex flex-col justify-between h-[130px] text-left hover:border-gray-400 cursor-pointer"
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-[14px] bg-[#FFC93C]/40 flex items-center justify-center text-[#3D0B0E]">
+                  <div className="w-10 h-10 rounded-[14px] bg-gray-200 flex items-center justify-center text-gray-600">
                     <CameraIcon size={22} />
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[11px]">
-                    +25
+                  <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 font-anton text-[10px] uppercase">
+                    COMING SOON
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-anton text-[16px] text-[#3D0B0E] leading-none uppercase">
+                  <span className="font-anton text-[16px] text-gray-700 leading-none uppercase">
                     SCAN BOTTLE
                   </span>
-                  <span className="text-[10px] font-bold text-[#7A4547] mt-1">
+                  <span className="text-[10px] font-bold text-gray-500 mt-1">
                     Verify Zee Sip bottle
                   </span>
                 </div>
-              </Link>
+              </button>
             </div>
           </div>
 
-          {/* THINGS TO DO NEXT SECTION */}
-          {incompleteTasks.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <h2 className="text-[22px] font-anton text-[#B92429] uppercase tracking-wide">
-                THINGS TO DO NEXT
-              </h2>
+          {/* THINGS TO DO SECTION (Fix 6 Ordering) */}
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[22px] font-anton text-[#B92429] uppercase tracking-wide">
+              THINGS TO DO
+            </h2>
 
-              <div className="flex flex-col gap-2.5">
-                {incompleteTasks.map((t) => (
-                  <Link
-                    key={t.id}
-                    href={t.link}
-                    className="w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-[#B92429] flex items-center justify-between transition-transform active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full border-2 border-[#3D0B0E]/30 bg-transparent" />
-                      <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                        {t.title}
-                      </span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                      {t.reward}
+            <div className="flex flex-col gap-2.5">
+              {/* 1. Daily Games */}
+              <Link
+                href="/play"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isSpunToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isSpunToday ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isSpunToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Spin the wheel</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isSpunToday ? 'Done today' : 'Daily spin available'}
                     </span>
-                  </Link>
-                ))}
-              </div>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              <Link
+                href="/play/three-sips"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isThreeSipsDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isThreeSipsDoneToday ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isThreeSipsDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Play Three Sips</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isThreeSipsDoneToday ? 'Done today' : '3-reel slot game'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              <Link
+                href="/play/pick-kulkki"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isKulkkiDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isKulkkiDoneToday ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isKulkkiDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Pick the Kulkki</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isKulkkiDoneToday ? 'Done today' : 'Bottle shuffle game'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +25
+                </span>
+              </Link>
+
+              <Link
+                href="/play/scratch"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isScratchDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isScratchDoneToday ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isScratchDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Scratch Your Sip</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isScratchDoneToday ? 'Done today' : 'Digital scratch card'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              {/* 2. Scan a Zee Sip bottle (Fix 6 & Fix 5) */}
+              <button
+                type="button"
+                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full border-2 border-gray-400 bg-transparent" />
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-gray-700">Scan a Zee Sip bottle</span>
+                    <span className="text-[10px] font-bold text-gray-500">Scan QR code on bottle</span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 font-anton text-[10px] uppercase">
+                  COMING SOON
+                </span>
+              </button>
+
+              {/* 3. Completed One-Time Tasks (Fix 6: at bottom, dimmed) */}
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isProfileDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isProfileDone ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isProfileDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Complete your profile</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isProfileDone ? 'Completed' : 'Add name, phone & pincode'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +10 coins
+                </span>
+              </Link>
+
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isAddressDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isAddressDone ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isAddressDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Add delivery address</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isAddressDone ? 'Completed' : 'Required to receive rewards'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +10 coins
+                </span>
+              </Link>
+
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isTeamDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                    isTeamDone ? 'bg-[#8FC31F] border-[#8FC31F] text-white' : 'border-[#3D0B0E]/30 bg-transparent'
+                  }`}>
+                    {isTeamDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">Pick your team</span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isTeamDone ? 'Completed' : 'Team Mango or Team Pineapple'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +5 coins
+                </span>
+              </Link>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -410,7 +592,9 @@ export default function PlayPage() {
               disabled={isSpinning}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 text-white font-bold flex items-center justify-center hover:bg-white/30 disabled:opacity-50"
             >
-              ✕
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
 
             <h3 className="font-anton text-[28px] text-[#FFC93C] uppercase tracking-wide">

@@ -21,7 +21,7 @@ const KulkkiBottle: React.FC<{ isPicked?: boolean; isRevealed?: boolean; isWinne
     <div
       className={`flex flex-col items-center justify-center transition-all duration-300 ${
         isPicked ? '-translate-y-4 scale-105' : 'translate-y-0'
-      } ${isRevealed && !isWinner ? 'opacity-40 grayscale' : 'opacity-100'}`}
+      } ${isRevealed && !isWinner ? 'opacity-50 grayscale' : 'opacity-100'}`}
     >
       <svg width="76" height="130" viewBox="0 0 76 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
         {/* Yellow Cap */}
@@ -117,7 +117,6 @@ export default function PickKulkkiPage() {
               .then((data) => {
                 if (data.game_id) {
                   setGameId(data.game_id);
-                  // 2.5s shuffle animation
                   setTimeout(() => {
                     setIsShuffling(false);
                   }, 2500);
@@ -256,7 +255,7 @@ export default function PickKulkkiPage() {
                 </div>
               ) : (
                 <span className="font-anton text-[20px] uppercase tracking-wide text-white/90">
-                  NOT THIS TIME! TRY AGAIN TOMORROW
+                  BETTER LUCK NEXT TIME!
                 </span>
               )}
             </div>
@@ -275,32 +274,48 @@ export default function PickKulkkiPage() {
             </div>
 
             {/* 3 Bottles Row */}
-            <div className="w-full flex items-center justify-around gap-2 my-2 min-h-[170px]">
+            <div className="w-full flex items-center justify-around gap-2 my-2 min-h-[190px]">
               {[0, 1, 2].map((pos) => {
                 const isPicked = pickedPos === pos;
-                const isWinner = winningPos === pos;
+                const isWinner = winningPos === pos && coinsWon !== null && coinsWon > 0;
                 const isRevealed = pickedPos !== null;
+                const isPickedWinner = isPicked && isWinner;
 
                 return (
                   <div
                     key={pos}
                     onClick={() => handlePickBottle(pos)}
-                    className={`flex flex-col items-center cursor-pointer transition-transform ${
+                    className={`flex flex-col items-center cursor-pointer p-2 transition-all rounded-[20px] ${
                       isShuffling ? 'animate-bounce' : 'hover:scale-105'
+                    } ${
+                      isRevealed && isPickedWinner
+                        ? 'border-4 border-[#8FC31F] shadow-[0_0_25px_#8FC31F] bg-[#8FC31F]/10'
+                        : isRevealed && isWinner
+                        ? 'border-2 border-[#FFC93C] shadow-[0_0_20px_#FFC93C] bg-[#FFC93C]/10'
+                        : ''
                     }`}
                   >
                     <KulkkiBottle isPicked={isPicked} isRevealed={isRevealed} isWinner={isWinner} />
 
-                    {/* Prize Reveal Display */}
+                    {/* Prize Reveal Display (Fix 2) */}
                     {isRevealed && (
-                      <div className="mt-1 flex flex-col items-center">
+                      <div className="mt-2 flex flex-col items-center min-h-[50px] justify-center">
                         {isWinner ? (
-                          <div className="flex items-center gap-1 font-anton text-[16px] text-[#8FC31F] animate-fadeIn">
-                            <CoinIcon size={18} />
-                            <span>+{coinsWon}</span>
+                          <div className={`flex flex-col items-center gap-1 ${isPickedWinner ? 'animate-bounce' : ''}`}>
+                            {/* Gold Coin SVG ~40px */}
+                            <CoinIcon size={40} />
+                            {/* +X in gold Anton font 24px */}
+                            <span
+                              className={`font-anton text-[24px] text-[#FFC93C] leading-none drop-shadow-sm ${
+                                isPickedWinner ? 'animate-pulse' : ''
+                              }`}
+                            >
+                              +{coinsWon}
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-[11px] font-extrabold text-[#7A4547]">
+                          /* Losing bottles show "Empty" in muted text #7A4547, 14px */
+                          <span className="text-[14px] font-bold text-[#7A4547] uppercase tracking-wider">
                             Empty
                           </span>
                         )}

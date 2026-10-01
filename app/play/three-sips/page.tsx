@@ -253,7 +253,7 @@ export default function ThreeSipsPage() {
   return (
     <main className="min-h-[100dvh] w-full bg-[#B92429] text-white flex flex-col justify-between pb-24 select-none relative overflow-hidden">
       <div>
-        {/* Top Header (No logo) */}
+        {/* Top Header */}
         <Header
           variant="red"
           rightElement={
@@ -282,7 +282,7 @@ export default function ThreeSipsPage() {
 
         {/* Main Content Area */}
         <div className="px-5 pt-4 flex flex-col gap-5 relative z-10">
-          {/* RESULT BANNER */}
+          {/* RESULT BANNER (No emojis) */}
           {gameResult && (
             <div
               className={`w-full rounded-[18px] p-3.5 text-center flex flex-col items-center gap-0.5 border-2 shadow-lg transition-all animate-fadeIn ${
@@ -297,19 +297,23 @@ export default function ThreeSipsPage() {
                 <div className="flex items-center gap-2">
                   <Sparkle color="gold" size={20} />
                   <span className="font-anton text-[26px] tracking-wide uppercase">
-                    🔥 JACKPOT! +50 COINS
+                    JACKPOT! +50 COINS
                   </span>
                   <Sparkle color="gold" size={20} />
                 </div>
               )}
               {gameResult.payout_type === 'triple' && (
-                <span className="font-anton text-[24px] uppercase tracking-wide">
-                  🎉 MATCH! +{gameResult.coins_won} COINS
-                </span>
+                <div className="flex items-center gap-2">
+                  <Sparkle color="gold" size={18} />
+                  <span className="font-anton text-[24px] uppercase tracking-wide">
+                    MATCH! +{gameResult.coins_won} COINS
+                  </span>
+                  <Sparkle color="gold" size={18} />
+                </div>
               )}
               {gameResult.payout_type === 'double' && (
                 <span className="font-anton text-[22px] uppercase tracking-wide">
-                  👏 CLOSE! +5 COINS
+                  CLOSE! +5 COINS
                 </span>
               )}
               {gameResult.payout_type === 'none' && (

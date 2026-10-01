@@ -100,15 +100,15 @@ export default function ScratchPage() {
     ctx.lineWidth = 4;
     ctx.strokeRect(8, 8, width - 16, height - 16);
 
-    // Text on canvas
+    // Surface text on canvas
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 22px "Anton", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SCRATCH HERE', width / 2, height / 2 - 6);
+    ctx.fillText('SCRATCH TO REVEAL', width / 2, height / 2 - 6);
 
     ctx.fillStyle = '#FFC93C';
     ctx.font = '13px "Montserrat", sans-serif';
-    ctx.fillText('✨ Use finger or mouse to reveal ✨', width / 2, height / 2 + 22);
+    ctx.fillText('Scratch with finger or mouse to reveal', width / 2, height / 2 + 22);
   }, [loading, alreadyPlayed]);
 
   // Calculate scratch percentage
@@ -122,7 +122,6 @@ export default function ScratchPage() {
     const pixels = imageData.data;
     let transparentCount = 0;
 
-    // Sample every 4th pixel for performance
     for (let i = 3; i < pixels.length; i += 16) {
       if (pixels[i] === 0) {
         transparentCount++;
@@ -135,7 +134,6 @@ export default function ScratchPage() {
 
     if (percent >= 50 && !isRevealed) {
       setIsRevealed(true);
-      // Fade out canvas completely
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (result) {
         if (result.coins_won >= 50) {
@@ -228,7 +226,7 @@ export default function ScratchPage() {
         <div className="w-full flex items-center justify-between mb-4">
           <Link
             href="/play"
-            className="flex items-center text-white/80 hover:text-white text-sm font-semibold transition-colors"
+            className="flex items-center text-white/80 hover:text-white text-sm font-semibold transition-colors uppercase tracking-wider"
           >
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
@@ -243,7 +241,7 @@ export default function ScratchPage() {
             SCRATCH YOUR SIP
           </h1>
           <p className="text-white/80 text-xs mt-1">
-            Scratch the ticket to win up to 50 Sip Coins!
+            Scratch the ticket to test your luck!
           </p>
         </div>
 
@@ -269,8 +267,10 @@ export default function ScratchPage() {
           </div>
         ) : alreadyPlayed ? (
           <div className="w-full max-w-[340px] p-6 bg-black/30 rounded-[24px] text-center border border-white/15 backdrop-blur-sm shadow-xl">
-            <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#FFC93C]/20 border border-[#FFC93C]/40 flex items-center justify-center">
-              <span className="text-2xl">⏳</span>
+            <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#FFC93C]/20 border border-[#FFC93C]/40 flex items-center justify-center text-[#FFC93C]">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
             <h2 className="font-['Anton',sans-serif] text-xl text-[#FFC93C] uppercase tracking-wide">
               ALREADY PLAYED TODAY
@@ -318,17 +318,21 @@ export default function ScratchPage() {
                       </span>
                     </div>
                     <span className="font-['Anton',sans-serif] text-xl text-white uppercase tracking-wider">
-                      SIP COINS WON!
+                      {result.prize_label}
                     </span>
                     <p className="text-xs text-white/70 mt-1">Added to your balance!</p>
                   </>
                 ) : (
                   <>
-                    <span className="text-4xl mb-2">😢</span>
+                    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center mb-2 text-white/60">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
                     <span className="font-['Anton',sans-serif] text-2xl text-[#FFC93C] uppercase tracking-wider">
-                      TRY AGAIN TOMORROW!
+                      BETTER LUCK NEXT TIME
                     </span>
-                    <p className="text-xs text-white/70 mt-1">Better luck on your next scratch!</p>
+                    <p className="text-xs text-white/70 mt-1">Try again tomorrow for another scratch!</p>
                   </>
                 )}
               </div>
@@ -402,27 +406,27 @@ export default function ScratchPage() {
           </h3>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="flex justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">🏆 Jackpot</span>
+              <span className="text-white/80 font-semibold">Mega Win</span>
               <span className="font-bold text-[#FFC93C]">+50 Coins</span>
             </div>
-            <div className="flex justify-[#FFC93C] justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">⭐ Rare</span>
+            <div className="flex justify-between bg-black/20 p-2 rounded-lg">
+              <span className="text-white/80 font-semibold">Big Win</span>
               <span className="font-bold text-[#FFC93C]">+25 Coins</span>
             </div>
             <div className="flex justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">✨ Medium</span>
+              <span className="text-white/80 font-semibold">Medium Win</span>
               <span className="font-bold text-[#FFC93C]">+15 Coins</span>
             </div>
             <div className="flex justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">🪙 Small</span>
+              <span className="text-white/80 font-semibold">Small Win</span>
               <span className="font-bold text-[#FFC93C]">+10 Coins</span>
             </div>
             <div className="flex justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">🎈 Mini</span>
+              <span className="text-white/80 font-semibold">Mini Win</span>
               <span className="font-bold text-[#FFC93C]">+5 Coins</span>
             </div>
             <div className="flex justify-between bg-black/20 p-2 rounded-lg">
-              <span className="text-white/80">😅 Try Again</span>
+              <span className="text-white/80 font-semibold">No Win</span>
               <span className="font-bold text-white/50">0 Coins</span>
             </div>
           </div>

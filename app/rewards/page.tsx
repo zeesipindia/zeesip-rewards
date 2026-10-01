@@ -117,7 +117,7 @@ export default function RewardsPage() {
               <p className="text-[11.5px] font-extrabold text-white/90 mt-2">
                 {remainingCoins > 0
                   ? `${remainingCoins} more coins to unlock a free Zee Sip`
-                  : '🎉 Reward unlocked! Contact us on WhatsApp to claim.'}
+                  : 'Reward unlocked! Contact us on WhatsApp to claim.'}
               </p>
             </div>
           </div>

@@ -2,11 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-interface GamePlayRow {
-  coins_won: number;
-  played_at: string;
-}
-
 function getMidnightISTNextAvailable(): string {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -57,44 +52,54 @@ export async function POST() {
     );
   }
 
-  // Fetch past plays for psychology rules
+  // Check if brand new user (first play ever)
   const { data: pastPlaysData } = await supabaseAdmin
     .from('game_plays')
-    .select('coins_won, played_at')
+    .select('id')
     .eq('user_id', user.id)
     .eq('game_type', 'scratch')
-    .order('played_at', { ascending: false })
-    .limit(3);
+    .limit(1);
 
-  const pastPlays = (pastPlaysData || []) as GamePlayRow[];
-  const isFirstPlay = pastPlays.length === 0;
-  const lastTwoWereZero = pastPlays.length >= 2 && pastPlays[0].coins_won === 0 && pastPlays[1].coins_won === 0;
-  const forceWin = isFirstPlay || lastTwoWereZero;
+  const isFirstPlayEver = !pastPlaysData || pastPlaysData.length === 0;
 
-  let prizeOptions = [
-    { coins: 5, prob: 0.25 },
-    { coins: 10, prob: 0.25 },
-    { coins: 15, prob: 0.15 },
-    { coins: 25, prob: 0.08 },
-    { coins: 50, prob: 0.02 },
-    { coins: 0, prob: 0.25 },
-  ];
+  let chosenPrize = 0;
 
-  if (forceWin) {
-    // Exclude 0, for first play ensure minimum 10
-    prizeOptions = prizeOptions.filter((p) => (isFirstPlay ? p.coins >= 10 : p.coins > 0));
+  if (isFirstPlayEver) {
+    // Brand new user first play ever gets +5
+    chosenPrize = 5;
+  } else {
+    // Rare probability distribution:
+    // +50: 0.5% (0.005)
+    // +25: 1.0% (0.010)
+    // +15: 2.0% (0.020)
+    // +10: 3.0% (0.030)
+    // +5:  3.5% (0.035)
+    // 0:   90.0% (0.900)
+    const rand = Math.random();
+    if (rand < 0.005) {
+      chosenPrize = 50;
+    } else if (rand < 0.015) {
+      chosenPrize = 25;
+    } else if (rand < 0.035) {
+      chosenPrize = 15;
+    } else if (rand < 0.065) {
+      chosenPrize = 10;
+    } else if (rand < 0.100) {
+      chosenPrize = 5;
+    } else {
+      chosenPrize = 0;
+    }
   }
 
-  const totalProb = prizeOptions.reduce((sum, p) => sum + p.prob, 0);
-  let rand = Math.random() * totalProb;
-  let chosenPrize = prizeOptions[0].coins;
-
-  for (const option of prizeOptions) {
-    if (rand <= option.prob) {
-      chosenPrize = option.coins;
-      break;
-    }
-    rand -= option.prob;
+  let prizeLabel = 'BETTER LUCK NEXT TIME';
+  if (chosenPrize === 50) {
+    prizeLabel = 'MEGA WIN! +50 SIP COINS!';
+  } else if (chosenPrize === 25) {
+    prizeLabel = 'BIG WIN! +25 SIP COINS!';
+  } else if (chosenPrize === 15 || chosenPrize === 10) {
+    prizeLabel = `YOU WON +${chosenPrize} SIP COINS!`;
+  } else if (chosenPrize === 5) {
+    prizeLabel = 'NICE! +5 SIP COINS';
   }
 
   const playedAt = new Date().toISOString();
@@ -102,7 +107,7 @@ export async function POST() {
   await supabaseAdmin.from('game_plays').insert({
     user_id: user.id,
     game_type: 'scratch',
-    result: { coins_won: chosenPrize, prize_label: chosenPrize > 0 ? `+${chosenPrize} COINS` : 'OOPS' },
+    result: { coins_won: chosenPrize, prize_label: prizeLabel },
     coins_won: chosenPrize,
     played_at: playedAt,
   });
@@ -124,7 +129,7 @@ export async function POST() {
 
   return NextResponse.json({
     coins_won: chosenPrize,
-    prize_label: chosenPrize > 0 ? `+${chosenPrize}` : 'OOPS',
+    prize_label: prizeLabel,
     next_available: nextAvailableISO,
   });
 }

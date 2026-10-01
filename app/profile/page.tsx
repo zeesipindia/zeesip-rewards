@@ -135,7 +135,7 @@ export default function ProfilePage() {
 
       setSuccessMsg(
         data.newlyAwardedCoins > 0
-          ? `Profile saved! You earned +${data.newlyAwardedCoins} bonus coins! 🎉`
+          ? `Profile saved! You earned +${data.newlyAwardedCoins} bonus coins!`
           : 'Profile saved successfully!'
       );
       setIsSubmitting(false);

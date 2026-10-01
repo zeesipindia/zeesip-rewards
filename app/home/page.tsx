@@ -26,6 +26,7 @@ export default function HomePage() {
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Task Completion States
   const [isProfileDone, setIsProfileDone] = useState<boolean>(false);
@@ -67,13 +68,9 @@ export default function HomePage() {
             if (profile.display_name) {
               setUserName(profile.display_name.split(' ')[0]);
             }
-            const profileDone = Boolean(profile.display_name && profile.phone_number && profile.pincode);
-            const addressDone = Boolean(profile.address_line1 && profile.city && profile.state && profile.pincode);
-            const teamDone = Boolean(profile.team);
-
-            setIsProfileDone(profileDone);
-            setIsAddressDone(addressDone);
-            setIsTeamDone(teamDone);
+            setIsProfileDone(Boolean(profile.display_name && profile.phone_number && profile.pincode));
+            setIsAddressDone(Boolean(profile.address_line1 && profile.city && profile.state && profile.pincode));
+            setIsTeamDone(Boolean(profile.team));
           }
         });
 
@@ -136,12 +133,22 @@ export default function HomePage() {
   const currentBalance = balance ?? 50;
   const remainingCoins = Math.max(0, target - currentBalance);
 
-  const handleBottleScanClick = () => {
-    router.push('/verify');
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg(null);
+    }, 3500);
   };
 
   return (
     <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
+      {/* Toast Notification Popup */}
+      {toastMsg && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
+          {toastMsg}
+        </div>
+      )}
+
       <div>
         {/* Top Yellow Band */}
         <div className="w-full bg-[#FFC93C] text-[#3D0B0E] pb-5 border-b-4 border-[#3D0B0E]">
@@ -205,112 +212,19 @@ export default function HomePage() {
               <p className="text-[11px] font-bold text-white/90 mt-1.5">
                 {remainingCoins > 0
                   ? `${remainingCoins} more coins to a free Zee Sip`
-                  : '🎉 Reward unlocked! Ready to claim.'}
+                  : 'Reward unlocked! Ready to claim.'}
               </p>
             </div>
           </div>
 
-          {/* THINGS TO DO SECTION */}
+          {/* THINGS TO DO SECTION (Fix 6 Order) */}
           <div className="flex flex-col gap-3">
             <h2 className="text-[26px] font-anton text-[#B92429] uppercase tracking-wide">
               THINGS TO DO
             </h2>
 
             <div className="flex flex-col gap-2.5">
-              {/* Task 1: Complete profile */}
-              <Link
-                href="/profile"
-                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isProfileDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isProfileDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isProfileDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Complete your profile
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isProfileDone ? 'Completed ✓' : 'Add name, phone & pincode'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +10 coins
-                </span>
-              </Link>
-
-              {/* Task 2: Add delivery address */}
-              <Link
-                href="/profile"
-                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isAddressDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isAddressDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isAddressDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Add delivery address
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isAddressDone ? 'Completed ✓' : 'Required to receive rewards'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +10 coins
-                </span>
-              </Link>
-
-              {/* Task 3: Pick your team */}
-              <Link
-                href="/profile"
-                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isTeamDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isTeamDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isTeamDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Pick your team
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isTeamDone ? 'Completed ✓' : 'Team Mango or Team Pineapple'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +5 coins
-                </span>
-              </Link>
-
-              {/* Task 4: Spin the wheel */}
+              {/* 1. Daily Games (Stay in daily section above coming soon and completed) */}
               <Link
                 href="/play"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -332,7 +246,7 @@ export default function HomePage() {
                       Spin the wheel
                     </span>
                     <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isSpinDoneToday ? 'Done today ✓' : 'Daily spin available'}
+                      {isSpinDoneToday ? 'Done today' : 'Daily spin available'}
                     </span>
                   </div>
                 </div>
@@ -341,7 +255,6 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 5: Play Three Sips */}
               <Link
                 href="/play/three-sips"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -363,7 +276,7 @@ export default function HomePage() {
                       Play Three Sips
                     </span>
                     <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isThreeSipsDoneToday ? 'Done today ✓' : 'Slot machine game'}
+                      {isThreeSipsDoneToday ? 'Done today' : 'Slot machine game'}
                     </span>
                   </div>
                 </div>
@@ -372,7 +285,6 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 6: Pick the Kulkki */}
               <Link
                 href="/play/pick-kulkki"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -394,7 +306,7 @@ export default function HomePage() {
                       Pick the Kulkki
                     </span>
                     <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isKulkkiDoneToday ? 'Done today ✓' : 'Bottle shuffle game'}
+                      {isKulkkiDoneToday ? 'Done today' : 'Bottle shuffle game'}
                     </span>
                   </div>
                 </div>
@@ -403,7 +315,6 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 7: Scratch Your Sip */}
               <Link
                 href="/play/scratch"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -425,7 +336,7 @@ export default function HomePage() {
                       Scratch Your Sip
                     </span>
                     <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isScratchDoneToday ? 'Done today ✓' : 'Digital scratch card'}
+                      {isScratchDoneToday ? 'Done today' : 'Digital scratch card'}
                     </span>
                   </div>
                 </div>
@@ -434,27 +345,118 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* Task 8: Scan a Zee Sip bottle */}
+              {/* 2. Scan a Zee Sip bottle (Fix 5 & Fix 6: COMING SOON tag, toast on click) */}
               <button
                 type="button"
-                onClick={handleBottleScanClick}
-                className="w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-[#B92429] flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left"
+                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full border-2 border-[#3D0B0E]/30 bg-transparent" />
+                  <div className="w-6 h-6 rounded-full border-2 border-gray-400 bg-transparent" />
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                    <span className="text-[13px] font-extrabold text-gray-700">
                       Scan a Zee Sip bottle
                     </span>
+                    <span className="text-[10px] font-bold text-gray-500">
+                      Scan QR code on bottle
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 font-anton text-[10px] uppercase">
+                  COMING SOON
+                </span>
+              </button>
+
+              {/* 3. Completed One-Time Tasks (Fix 6: at bottom with green checkmarks, dimmed) */}
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isProfileDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isProfileDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isProfileDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Complete your profile
+                    </span>
                     <span className="text-[10px] font-bold text-[#7A4547]">
-                      Scan QR on any bottle
+                      {isProfileDone ? 'Completed' : 'Add name, phone & pincode'}
                     </span>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +25 coins
+                  +10 coins
                 </span>
-              </button>
+              </Link>
+
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isAddressDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isAddressDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isAddressDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Add delivery address
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isAddressDone ? 'Completed' : 'Required to receive rewards'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +10 coins
+                </span>
+              </Link>
+
+              <Link
+                href="/profile"
+                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isTeamDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isTeamDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isTeamDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Pick your team
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isTeamDone ? 'Completed' : 'Team Mango or Team Pineapple'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +5 coins
+                </span>
+              </Link>
             </div>
           </div>
 
@@ -486,7 +488,9 @@ export default function HomePage() {
                 onClick={() => setShowHistoryModal(false)}
                 className="w-8 h-8 rounded-full bg-[#FFF5F3] text-[#3D0B0E] font-bold flex items-center justify-center hover:bg-[#FCE4E1]"
               >
-                ✕
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
