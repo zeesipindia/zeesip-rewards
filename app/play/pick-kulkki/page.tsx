@@ -286,7 +286,7 @@ export default function PickKulkkiPage() {
             <div className="w-full flex items-center justify-around gap-2 my-2 min-h-[190px]">
               {[0, 1, 2].map((pos) => {
                 const isPicked = pickedPos === pos;
-                const isWinner = winningPos === pos && coinsWon !== null && coinsWon > 0;
+                const isWinner = winningPos === pos;
                 const isRevealed = pickedPos !== null;
                 const isPickedWinner = isPicked && isWinner;
 
@@ -294,25 +294,31 @@ export default function PickKulkkiPage() {
                   <div
                     key={pos}
                     onClick={() => handlePickBottle(pos)}
-                    className={`flex flex-col items-center cursor-pointer p-2 transition-all rounded-[20px] ${
+                    className={`flex flex-col items-center cursor-pointer p-2 transition-all rounded-[16px] ${
                       isShuffling ? 'animate-bounce' : 'hover:scale-105'
-                    } ${
-                      isRevealed && isPickedWinner
-                        ? 'border-4 border-[#4CAF50] shadow-[0_0_25px_#4CAF50] bg-[#4CAF50]/10'
-                        : isRevealed && isWinner
-                        ? 'border-2 border-[#FFC93C] shadow-[0_0_20px_#FFC93C] bg-[#FFC93C]/10'
-                        : ''
                     }`}
+                    style={{
+                      border: isRevealed && isWinner ? '3px solid #FFC93C' : '3px solid transparent',
+                      borderRadius: '16px',
+                      opacity: isRevealed && !isWinner ? 0.4 : 1,
+                    }}
                   >
+                    {/* YOU GOT IT! text above bottle if user picked winning bottle */}
+                    {isRevealed && isPickedWinner && (
+                      <span className="text-[12px] font-anton text-[#4CAF50] uppercase tracking-wider mb-1 animate-bounce">
+                        YOU GOT IT!
+                      </span>
+                    )}
+
                     <KulkkiBottle isPicked={isPicked} isRevealed={isRevealed} isWinner={isWinner} />
 
-                    {/* Prize Reveal Display (Fix 3) */}
+                    {/* Prize Reveal Display */}
                     {isRevealed && (
-                      <div className="mt-2 flex flex-col items-center min-h-[52px] justify-center">
+                      <div className="mt-2 flex flex-col items-center min-h-[60px] justify-center">
                         {isWinner ? (
                           <div className={`flex flex-col items-center gap-1 ${isPickedWinner ? 'animate-bounce' : ''}`}>
-                            {/* Gold Coin SVG 36px */}
-                            <svg width="36" height="36" viewBox="0 0 24 24">
+                            {/* Gold Coin SVG 40x40px */}
+                            <svg width="40" height="40" viewBox="0 0 24 24">
                               <circle cx="12" cy="12" r="11" fill="#FFC93C" />
                               <circle cx="12" cy="12" r="7" fill="none" stroke="#B92429" strokeWidth="1.6" />
                               <path
@@ -321,12 +327,8 @@ export default function PickKulkkiPage() {
                               />
                             </svg>
                             {/* +X in gold #FFC93C Anton font 22px */}
-                            <span
-                              className={`font-anton text-[22px] text-[#FFC93C] leading-none drop-shadow-sm ${
-                                isPickedWinner ? 'animate-pulse' : ''
-                              }`}
-                            >
-                              +{coinsWon}
+                            <span className="font-anton text-[22px] text-[#FFC93C] leading-none drop-shadow-sm">
+                              +{coinsWon && coinsWon > 0 ? coinsWon : 25}
                             </span>
                           </div>
                         ) : (

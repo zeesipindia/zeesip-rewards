@@ -169,6 +169,19 @@ export default function PlayPage() {
     };
   }, [router, fetchBalance]);
 
+  useEffect(() => {
+    if (isSpinModalOpen) {
+      window.history.pushState({ spinModal: true }, '');
+      const handlePopState = () => {
+        setIsSpinModalOpen(false);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }
+  }, [isSpinModalOpen]);
+
   const handleStartSpin = async () => {
     if (isSpinning || isSpunToday) return;
 
@@ -605,7 +618,7 @@ export default function PlayPage() {
         </div>
       </div>
 
-      {/* SPIN WHEEL MODAL (Fix 1) */}
+      {/* SPIN WHEEL MODAL (Bug 1 Fix) */}
       {isSpinModalOpen && (
         <div
           onClick={() => {
@@ -614,24 +627,53 @@ export default function PlayPage() {
           }}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 cursor-pointer"
         >
+          {/* ALWAYS VISIBLE FIXED TOP-RIGHT CLOSE BUTTON (48x48px) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSpinModalOpen(false);
+              router.push('/home');
+            }}
+            style={{
+              position: 'fixed',
+              top: '16px',
+              right: '16px',
+              zIndex: 9999,
+              width: '48px',
+              height: '48px',
+              background: 'rgba(0,0,0,0.5)',
+              border: 'none',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            aria-label="Close"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
+
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#B92429] rounded-[28px] p-6 shadow-2xl flex flex-col items-center gap-5 relative text-white border-2 border-[#FFC93C] cursor-default"
           >
-            {/* Top Right Close Button (44x44px touch target) */}
-            <button
-              onClick={() => {
-                setIsSpinModalOpen(false);
-                router.push('/home');
-              }}
-              disabled={isSpinning}
-              aria-label="Close"
-              className="absolute -top-3 -right-3 w-11 h-11 rounded-full bg-[#B92429] text-white font-bold flex items-center justify-center border-2 border-[#FFC93C] shadow-lg hover:brightness-110 active:scale-95 disabled:opacity-50 z-30 cursor-pointer"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            {/* Modal Header: Top-Left ← BACK link */}
+            <div className="w-full flex items-center justify-between z-10">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSpinModalOpen(false);
+                  router.push('/play');
+                }}
+                className="text-xs font-bold text-white/80 hover:text-white uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+              >
+                ← BACK
+              </button>
+            </div>
 
             <h3 className="font-anton text-[28px] text-[#FFC93C] uppercase tracking-wide">
               DAILY SPIN
@@ -651,6 +693,7 @@ export default function PlayPage() {
 
                 {/* SAVE MY COINS / CONTINUE button */}
                 <button
+                  type="button"
                   onClick={() => {
                     setIsSpinModalOpen(false);
                     router.push('/home');
@@ -676,6 +719,7 @@ export default function PlayPage() {
 
             {!spinResult && (
               <button
+                type="button"
                 onClick={handleStartSpin}
                 disabled={isSpinning}
                 className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[18px] shadow-lg transition-all disabled:opacity-75 cursor-pointer"
