@@ -37,7 +37,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
         setRotation(finalAngle);
         const timer = setTimeout(() => {
           if (onSpinComplete) onSpinComplete();
-        }, 4000);
+        }, 4500);
         return () => clearTimeout(timer);
       }
     }
@@ -70,7 +70,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
           className="w-full h-full rounded-full shadow-[0_15px_35px_rgba(0,0,0,0.35)]"
           style={{
             transform: `rotate(${rotation}deg)`,
-            transition: isSpinning ? 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)' : 'none',
+            transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
             willChange: 'transform',
           }}
         >

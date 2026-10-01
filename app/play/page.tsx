@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
@@ -10,6 +11,7 @@ import { MiniWheelIcon, CameraIcon, TicketIcon, SlotsIcon, CheckIcon } from '@/c
 import { createClient } from '@/lib/supabase/client';
 
 export default function PlayPage() {
+  const router = useRouter();
   const [balance, setBalance] = useState<number>(0);
   const [isSpunToday, setIsSpunToday] = useState<boolean>(false);
   const [isThreeSipsDoneToday, setIsThreeSipsDoneToday] = useState<boolean>(false);
@@ -32,18 +34,31 @@ export default function PlayPage() {
   const [isAddressDone, setIsAddressDone] = useState<boolean>(false);
   const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
 
+  const fetchBalance = useCallback(() => {
+    fetch('/api/balance')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.balance !== undefined) setBalance(data.balance);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
 
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
 
+      // Prefetch routes for instant navigation
+      router.prefetch('/home');
+      router.prefetch('/profile');
+      router.prefetch('/play/three-sips');
+      router.prefetch('/play/pick-kulkki');
+      router.prefetch('/play/scratch');
+      router.prefetch('/rewards');
+
       // Fetch balance
-      fetch('/api/balance')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.balance !== undefined) setBalance(data.balance);
-        });
+      fetchBalance();
 
       const todayStr = new Date().toISOString().split('T')[0];
 
@@ -123,6 +138,9 @@ export default function PlayPage() {
         });
     });
 
+    // Re-fetch balance on window focus (Fix 9)
+    window.addEventListener('focus', fetchBalance);
+
     // Countdown timer to midnight IST
     const updateCountdown = () => {
       const now = new Date();
@@ -144,8 +162,12 @@ export default function PlayPage() {
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, []);
+
+    return () => {
+      window.removeEventListener('focus', fetchBalance);
+      clearInterval(interval);
+    };
+  }, [router, fetchBalance]);
 
   const handleStartSpin = async () => {
     if (isSpinning || isSpunToday) return;
@@ -193,7 +215,7 @@ export default function PlayPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
       {/* Toast Notification Popup */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
@@ -329,7 +351,7 @@ export default function PlayPage() {
                 </div>
               </Link>
 
-              {/* Scratch Your Sip (Fix 4 subtitle) */}
+              {/* Scratch Your Sip */}
               <Link
                 href="/play/scratch"
                 className="bg-white rounded-[20px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[130px] text-left hover:border-[#B92429] transition-all"
@@ -358,7 +380,7 @@ export default function PlayPage() {
                 </div>
               </Link>
 
-              {/* Scan a Bottle Card (Fix 5: COMING SOON + Toast) */}
+              {/* Scan a Bottle Card */}
               <button
                 type="button"
                 onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
@@ -384,7 +406,7 @@ export default function PlayPage() {
             </div>
           </div>
 
-          {/* THINGS TO DO SECTION (Fix 6 Ordering) */}
+          {/* THINGS TO DO SECTION */}
           <div className="flex flex-col gap-3">
             <h2 className="text-[22px] font-anton text-[#B92429] uppercase tracking-wide">
               THINGS TO DO
@@ -488,7 +510,7 @@ export default function PlayPage() {
                 </span>
               </Link>
 
-              {/* 2. Scan a Zee Sip bottle (Fix 6 & Fix 5) */}
+              {/* 2. Scan a Zee Sip bottle */}
               <button
                 type="button"
                 onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
@@ -506,7 +528,7 @@ export default function PlayPage() {
                 </span>
               </button>
 
-              {/* 3. Completed One-Time Tasks (Fix 6: at bottom, dimmed) */}
+              {/* 3. Completed One-Time Tasks */}
               <Link
                 href="/profile"
                 className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -583,16 +605,30 @@ export default function PlayPage() {
         </div>
       </div>
 
-      {/* SPIN WHEEL MODAL */}
+      {/* SPIN WHEEL MODAL (Fix 1) */}
       {isSpinModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#B92429] rounded-[28px] p-6 shadow-2xl flex flex-col items-center gap-5 relative text-white border-2 border-[#FFC93C]">
+        <div
+          onClick={() => {
+            setIsSpinModalOpen(false);
+            router.push('/home');
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#B92429] rounded-[28px] p-6 shadow-2xl flex flex-col items-center gap-5 relative text-white border-2 border-[#FFC93C] cursor-default"
+          >
+            {/* Top Right Close Button (44x44px touch target) */}
             <button
-              onClick={() => setIsSpinModalOpen(false)}
+              onClick={() => {
+                setIsSpinModalOpen(false);
+                router.push('/home');
+              }}
               disabled={isSpinning}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 text-white font-bold flex items-center justify-center hover:bg-white/30 disabled:opacity-50"
+              aria-label="Close"
+              className="absolute -top-3 -right-3 w-11 h-11 rounded-full bg-[#B92429] text-white font-bold flex items-center justify-center border-2 border-[#FFC93C] shadow-lg hover:brightness-110 active:scale-95 disabled:opacity-50 z-30 cursor-pointer"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -608,15 +644,32 @@ export default function PlayPage() {
             />
 
             {spinResult && !isSpinning && (
-              <div className="flex flex-col items-center gap-1 animate-fadeIn">
-                <span className="font-anton text-[36px] text-[#FFC93C]">
+              <div className="flex flex-col items-center gap-2 animate-fadeIn w-full">
+                <span className="font-anton text-[32px] text-[#FFC93C] text-center leading-tight">
                   {spinResult.value > 0 ? `YOU WON ${spinResult.label} COINS!` : 'OOPS! BETTER LUCK NEXT TIME'}
                 </span>
+
+                {/* SAVE MY COINS / CONTINUE button */}
                 <button
-                  onClick={() => setIsSpinModalOpen(false)}
-                  className="mt-2 px-6 py-2.5 rounded-full bg-[#FFC93C] text-[#3D0B0E] font-anton text-[16px] uppercase"
+                  onClick={() => {
+                    setIsSpinModalOpen(false);
+                    router.push('/home');
+                  }}
+                  className="w-full py-3.5 bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[18px] uppercase rounded-[16px] shadow-md transition-all cursor-pointer mt-1"
                 >
-                  CONTINUE
+                  {spinResult.value > 0 ? 'SAVE MY COINS' : 'CONTINUE'}
+                </button>
+
+                {/* BACK TO HOME text link */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSpinModalOpen(false);
+                    router.push('/home');
+                  }}
+                  className="text-xs font-bold text-white/80 hover:text-white uppercase tracking-wider underline underline-offset-2 cursor-pointer mt-1"
+                >
+                  BACK TO HOME
                 </button>
               </div>
             )}
@@ -625,7 +678,7 @@ export default function PlayPage() {
               <button
                 onClick={handleStartSpin}
                 disabled={isSpinning}
-                className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[18px] shadow-lg transition-all disabled:opacity-75"
+                className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[18px] shadow-lg transition-all disabled:opacity-75 cursor-pointer"
               >
                 {isSpinning ? 'SPINNING...' : 'SPIN'}
               </button>

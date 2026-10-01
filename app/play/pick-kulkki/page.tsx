@@ -8,6 +8,7 @@ import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
 import { Sparkle } from '@/components/Sparkles';
+import { CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
 import { playPopSound, playWinSound, playLoseSound } from '@/lib/sound';
 
@@ -19,9 +20,9 @@ const KulkkiBottle: React.FC<{ isPicked?: boolean; isRevealed?: boolean; isWinne
 }) => {
   return (
     <div
-      className={`flex flex-col items-center justify-center transition-all duration-300 ${
+      className={`relative flex flex-col items-center justify-center transition-all duration-300 ${
         isPicked ? '-translate-y-4 scale-105' : 'translate-y-0'
-      } ${isRevealed && !isWinner ? 'opacity-50 grayscale' : 'opacity-100'}`}
+      } ${isRevealed && !isWinner ? 'opacity-40 grayscale' : 'opacity-100'}`}
     >
       <svg width="76" height="130" viewBox="0 0 76 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
         {/* Yellow Cap */}
@@ -45,6 +46,7 @@ const KulkkiBottle: React.FC<{ isPicked?: boolean; isRevealed?: boolean; isWinne
         {/* Label Logo */}
         <circle cx="38" cy="79" r="14" fill="#FFFFFF" />
       </svg>
+
       {/* Logo Image in Label Circle */}
       <img
         src="/zeesip-logo.png"
@@ -57,6 +59,13 @@ const KulkkiBottle: React.FC<{ isPicked?: boolean; isRevealed?: boolean; isWinne
 
       {/* Platform Shadow */}
       <div className="w-16 h-3 rounded-full bg-[#3D0B0E]/20 mt-6" />
+
+      {/* Green checkmark badge if user picked winning bottle */}
+      {isRevealed && isWinner && isPicked && (
+        <div className="absolute -top-3 -right-2 bg-[#4CAF50] text-white p-1.5 rounded-full shadow-lg border-2 border-white z-20 animate-bounce">
+          <CheckIcon size={14} />
+        </div>
+      )}
     </div>
   );
 };
@@ -205,7 +214,7 @@ export default function PickKulkkiPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] w-full bg-[#B92429] text-white flex flex-col justify-between pb-24 select-none relative overflow-hidden">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429] text-white flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
       <div>
         {/* Header */}
         <Header
@@ -218,13 +227,13 @@ export default function PickKulkkiPage() {
           }
         />
 
-        {/* Back Link & Title */}
+        {/* Back Link & Title (Fix 7) */}
         <div className="px-5 pt-1 flex flex-col gap-1 z-10 relative">
           <Link
             href="/play"
-            className="inline-flex items-center gap-1 text-[12px] font-extrabold text-white/80 hover:text-white uppercase tracking-wider mb-1"
+            className="inline-flex items-center gap-1 text-[12px] font-extrabold text-white/80 hover:text-white uppercase tracking-wider mb-1 cursor-pointer"
           >
-            ← Back to Play
+            ← BACK TO PLAY
           </Link>
           <h1 className="text-[44px] font-anton text-[#FFC93C] leading-none uppercase tracking-tight drop-shadow-md">
             PICK THE KULKKI
@@ -239,7 +248,7 @@ export default function PickKulkkiPage() {
           {/* RESULT BANNER */}
           {pickedPos !== null && coinsWon !== null && (
             <div
-              className={`w-full rounded-[18px] p-3.5 text-center flex flex-col items-center gap-0.5 border-2 shadow-lg transition-all animate-fadeIn ${
+              className={`w-full rounded-[18px] p-3.5 text-center flex flex-col items-center gap-1 border-2 shadow-lg transition-all animate-fadeIn ${
                 coinsWon > 0
                   ? 'bg-[#CDEE1C] border-[#3D0B0E] text-[#3D0B0E]'
                   : 'bg-black/40 border-white/20 text-white/90'
@@ -249,7 +258,7 @@ export default function PickKulkkiPage() {
                 <div className="flex items-center gap-2">
                   <Sparkle color="gold" size={20} />
                   <span className="font-anton text-[24px] uppercase tracking-wide">
-                    YOU FOUND IT! +{coinsWon} COINS
+                    {pickedPos === winningPos ? 'YOU GOT IT! ' : ''}+{coinsWon} COINS
                   </span>
                   <Sparkle color="gold" size={20} />
                 </div>
@@ -289,7 +298,7 @@ export default function PickKulkkiPage() {
                       isShuffling ? 'animate-bounce' : 'hover:scale-105'
                     } ${
                       isRevealed && isPickedWinner
-                        ? 'border-4 border-[#8FC31F] shadow-[0_0_25px_#8FC31F] bg-[#8FC31F]/10'
+                        ? 'border-4 border-[#4CAF50] shadow-[0_0_25px_#4CAF50] bg-[#4CAF50]/10'
                         : isRevealed && isWinner
                         ? 'border-2 border-[#FFC93C] shadow-[0_0_20px_#FFC93C] bg-[#FFC93C]/10'
                         : ''
@@ -297,16 +306,23 @@ export default function PickKulkkiPage() {
                   >
                     <KulkkiBottle isPicked={isPicked} isRevealed={isRevealed} isWinner={isWinner} />
 
-                    {/* Prize Reveal Display (Fix 2) */}
+                    {/* Prize Reveal Display (Fix 3) */}
                     {isRevealed && (
-                      <div className="mt-2 flex flex-col items-center min-h-[50px] justify-center">
+                      <div className="mt-2 flex flex-col items-center min-h-[52px] justify-center">
                         {isWinner ? (
                           <div className={`flex flex-col items-center gap-1 ${isPickedWinner ? 'animate-bounce' : ''}`}>
-                            {/* Gold Coin SVG ~40px */}
-                            <CoinIcon size={40} />
-                            {/* +X in gold Anton font 24px */}
+                            {/* Gold Coin SVG 36px */}
+                            <svg width="36" height="36" viewBox="0 0 24 24">
+                              <circle cx="12" cy="12" r="11" fill="#FFC93C" />
+                              <circle cx="12" cy="12" r="7" fill="none" stroke="#B92429" strokeWidth="1.6" />
+                              <path
+                                d="M12 6.5C12.35 10.2 13.8 11.65 17.5 12 13.8 12.35 12.35 13.8 12 17.5 11.65 13.8 10.2 12.35 6.5 12 10.2 11.65 11.65 10.2 12 6.5z"
+                                fill="#B92429"
+                              />
+                            </svg>
+                            {/* +X in gold #FFC93C Anton font 22px */}
                             <span
-                              className={`font-anton text-[24px] text-[#FFC93C] leading-none drop-shadow-sm ${
+                              className={`font-anton text-[22px] text-[#FFC93C] leading-none drop-shadow-sm ${
                                 isPickedWinner ? 'animate-pulse' : ''
                               }`}
                             >
@@ -314,8 +330,8 @@ export default function PickKulkkiPage() {
                             </span>
                           </div>
                         ) : (
-                          /* Losing bottles show "Empty" in muted text #7A4547, 14px */
-                          <span className="text-[14px] font-bold text-[#7A4547] uppercase tracking-wider">
+                          /* Losing bottles show "Empty" in muted text #7A4547, 13px Montserrat */
+                          <span className="text-[13px] font-bold text-[#7A4547] font-['Montserrat',sans-serif] tracking-wider">
                             Empty
                           </span>
                         )}
@@ -332,18 +348,25 @@ export default function PickKulkkiPage() {
               </p>
             )}
 
-            {/* COUNTDOWN / STATUS */}
+            {/* COUNTDOWN / STATUS / BACK TO PLAY BUTTON (Fix 7) */}
             {isPlayedToday && (
-              <div className="w-full flex flex-col items-center gap-2 pt-2 border-t border-[#F4D2CF]">
+              <div className="w-full flex flex-col items-center gap-2.5 pt-2 border-t border-[#F4D2CF]">
                 <button
                   disabled
-                  className="w-full h-[54px] bg-[#3D0B0E]/10 text-[#3D0B0E]/50 font-anton text-[20px] uppercase rounded-[16px] border-2 border-[#3D0B0E]/20 cursor-not-allowed"
+                  className="w-full h-[50px] bg-[#3D0B0E]/10 text-[#3D0B0E]/50 font-anton text-[18px] uppercase rounded-[16px] border-2 border-[#3D0B0E]/20 cursor-not-allowed"
                 >
                   COME BACK TOMORROW
                 </button>
                 <span className="text-[12px] font-extrabold text-[#7A4547] uppercase tracking-wider">
                   Next play in: {countdown}
                 </span>
+
+                <Link
+                  href="/play"
+                  className="w-full py-3 bg-[#FFC93C] text-[#3D0B0E] font-anton text-[16px] uppercase tracking-wider text-center rounded-[14px] hover:brightness-110 active:scale-95 transition-transform shadow-md mt-1 cursor-pointer"
+                >
+                  BACK TO PLAY
+                </Link>
               </div>
             )}
           </div>

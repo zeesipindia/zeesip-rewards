@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
@@ -38,6 +38,18 @@ export default function HomePage() {
   const [isScratchDoneToday, setIsScratchDoneToday] = useState<boolean>(false);
   const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
+  const fetchBalance = useCallback(() => {
+    fetch('/api/balance')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.balance !== undefined) {
+          setBalance(data.balance);
+          setProgressPercent(data.progress_percent || 0);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -49,7 +61,7 @@ export default function HomePage() {
 
       setUserName(user.user_metadata?.full_name?.split(' ')[0] || 'Sipper');
 
-      // Prefetch routes
+      // Prefetch routes for instant navigation
       router.prefetch('/profile');
       router.prefetch('/play');
       router.prefetch('/play/three-sips');
@@ -75,17 +87,7 @@ export default function HomePage() {
         });
 
       // Fetch balance from API
-      fetch('/api/balance')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.balance !== undefined) {
-            setBalance(data.balance);
-            setProgressPercent(data.progress_percent || 0);
-          } else {
-            setBalance(0);
-          }
-        })
-        .catch(() => setBalance(0));
+      fetchBalance();
 
       // Fetch today's activities & check tasks
       const todayStr = new Date().toISOString().split('T')[0];
@@ -128,7 +130,13 @@ export default function HomePage() {
           }
         });
     });
-  }, [router]);
+
+    // Re-fetch balance on window focus (Fix 9)
+    window.addEventListener('focus', fetchBalance);
+    return () => {
+      window.removeEventListener('focus', fetchBalance);
+    };
+  }, [router, fetchBalance]);
 
   const currentBalance = balance ?? 50;
   const remainingCoins = Math.max(0, target - currentBalance);
@@ -141,7 +149,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
       {/* Toast Notification Popup */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
@@ -217,14 +225,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* THINGS TO DO SECTION (Fix 6 Order) */}
+          {/* THINGS TO DO SECTION */}
           <div className="flex flex-col gap-3">
             <h2 className="text-[26px] font-anton text-[#B92429] uppercase tracking-wide">
               THINGS TO DO
             </h2>
 
             <div className="flex flex-col gap-2.5">
-              {/* 1. Daily Games (Stay in daily section above coming soon and completed) */}
+              {/* 1. Daily Games */}
               <Link
                 href="/play"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
@@ -345,7 +353,7 @@ export default function HomePage() {
                 </span>
               </Link>
 
-              {/* 2. Scan a Zee Sip bottle (Fix 5 & Fix 6: COMING SOON tag, toast on click) */}
+              {/* 2. Scan a Zee Sip bottle */}
               <button
                 type="button"
                 onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
@@ -367,7 +375,7 @@ export default function HomePage() {
                 </span>
               </button>
 
-              {/* 3. Completed One-Time Tasks (Fix 6: at bottom with green checkmarks, dimmed) */}
+              {/* 3. Completed One-Time Tasks */}
               <Link
                 href="/profile"
                 className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${

@@ -238,7 +238,7 @@ export default function ThreeSipsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] w-full bg-[#B92429] flex flex-col justify-between p-6 text-white">
+      <div className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429] flex flex-col justify-between p-6 text-white shadow-2xl">
         <Header variant="red" />
         <div className="my-auto flex flex-col items-center gap-3">
           <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
@@ -251,7 +251,7 @@ export default function ThreeSipsPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] w-full bg-[#B92429] text-white flex flex-col justify-between pb-24 select-none relative overflow-hidden">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429] text-white flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
       <div>
         {/* Top Header */}
         <Header
@@ -264,13 +264,13 @@ export default function ThreeSipsPage() {
           }
         />
 
-        {/* Back Link & Title */}
+        {/* Back Link & Title (Fix 7) */}
         <div className="px-5 pt-1 flex flex-col gap-1 z-10 relative">
           <Link
             href="/play"
-            className="inline-flex items-center gap-1 text-[12px] font-extrabold text-white/80 hover:text-white uppercase tracking-wider mb-1"
+            className="inline-flex items-center gap-1 text-[12px] font-extrabold text-white/80 hover:text-white uppercase tracking-wider mb-1 cursor-pointer"
           >
-            ← Back to Play
+            ← BACK TO PLAY
           </Link>
           <h1 className="text-[44px] font-anton text-[#FFC93C] leading-none uppercase tracking-tight drop-shadow-md">
             THREE SIPS
@@ -375,18 +375,25 @@ export default function ThreeSipsPage() {
               </p>
             )}
 
-            {/* PULL BUTTON / COUNTDOWN */}
+            {/* PULL BUTTON / COUNTDOWN / BACK TO PLAY BUTTON (Fix 7) */}
             {isPlayedToday ? (
-              <div className="w-full flex flex-col items-center gap-2">
+              <div className="w-full flex flex-col items-center gap-2.5">
                 <button
                   disabled
-                  className="w-full h-[62px] bg-white/10 text-white/50 font-anton text-[22px] uppercase rounded-[18px] border-2 border-white/10 cursor-not-allowed"
+                  className="w-full h-[54px] bg-white/10 text-white/50 font-anton text-[20px] uppercase rounded-[18px] border-2 border-white/10 cursor-not-allowed"
                 >
                   COME BACK TOMORROW
                 </button>
                 <span className="text-[12px] font-extrabold text-[#FFC93C] uppercase tracking-wider">
                   Next play in: {countdown}
                 </span>
+
+                <Link
+                  href="/play"
+                  className="w-full py-3 bg-[#FFC93C] text-[#3D0B0E] font-anton text-[16px] uppercase tracking-wider text-center rounded-[14px] hover:brightness-110 active:scale-95 transition-transform shadow-md mt-1 cursor-pointer"
+                >
+                  BACK TO PLAY
+                </Link>
               </div>
             ) : (
               <button

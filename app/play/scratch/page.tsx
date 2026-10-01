@@ -181,12 +181,14 @@ export default function ScratchPage() {
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     isDrawing.current = true;
     const touch = e.touches[0];
     scratch(touch.clientX, touch.clientY);
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     if (!isDrawing.current) return;
     const touch = e.touches[0];
     scratch(touch.clientX, touch.clientY);
@@ -222,16 +224,13 @@ export default function ScratchPage() {
       <Header />
 
       <main className="flex-1 w-full max-w-[430px] mx-auto px-4 pt-4 flex flex-col items-center">
-        {/* Back Link */}
+        {/* Back Link (Fix 7) */}
         <div className="w-full flex items-center justify-between mb-4">
           <Link
             href="/play"
-            className="flex items-center text-white/80 hover:text-white text-sm font-semibold transition-colors uppercase tracking-wider"
+            className="flex items-center text-white/80 hover:text-white text-xs font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
           >
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Games
+            ← BACK TO PLAY
           </Link>
         </div>
 
@@ -260,13 +259,13 @@ export default function ScratchPage() {
                 apiFetched.current = false;
                 fetchScratchResult();
               }}
-              className="px-6 py-2 bg-[#FFC93C] text-[#B92429] font-['Anton',sans-serif] rounded-full uppercase tracking-wider text-sm hover:brightness-110 active:scale-95 transition-transform"
+              className="px-6 py-2 bg-[#FFC93C] text-[#B92429] font-['Anton',sans-serif] rounded-full uppercase tracking-wider text-sm hover:brightness-110 active:scale-95 transition-transform cursor-pointer"
             >
               Retry
             </button>
           </div>
         ) : alreadyPlayed ? (
-          <div className="w-full max-w-[340px] p-6 bg-black/30 rounded-[24px] text-center border border-white/15 backdrop-blur-sm shadow-xl">
+          <div className="w-full max-w-[340px] p-6 bg-black/30 rounded-[24px] text-center border border-white/15 backdrop-blur-sm shadow-xl flex flex-col items-center">
             <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#FFC93C]/20 border border-[#FFC93C]/40 flex items-center justify-center text-[#FFC93C]">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -280,7 +279,7 @@ export default function ScratchPage() {
             </p>
 
             {timeLeft && (
-              <div className="flex justify-center items-center gap-2 font-['Anton',sans-serif] text-2xl text-white bg-black/40 py-3 rounded-xl border border-white/10 mb-5">
+              <div className="w-full flex justify-center items-center gap-2 font-['Anton',sans-serif] text-2xl text-white bg-black/40 py-3 rounded-xl border border-white/10 mb-5">
                 <span>{String(timeLeft.hours).padStart(2, '0')}h</span>
                 <span className="text-[#FFC93C]">:</span>
                 <span>{String(timeLeft.minutes).padStart(2, '0')}m</span>
@@ -291,9 +290,9 @@ export default function ScratchPage() {
 
             <Link
               href="/play"
-              className="inline-block w-full py-3 bg-[#FFC93C] text-[#B92429] font-['Anton',sans-serif] text-base uppercase tracking-wider rounded-full hover:brightness-110 active:scale-95 transition-transform"
+              className="inline-block w-full py-3 bg-[#FFC93C] text-[#3D0B0E] font-anton text-base uppercase tracking-wider rounded-full hover:brightness-110 active:scale-95 transition-transform text-center cursor-pointer shadow-md"
             >
-              Play Other Games
+              BACK TO PLAY
             </Link>
           </div>
         ) : (
@@ -337,7 +336,7 @@ export default function ScratchPage() {
                 )}
               </div>
 
-              {/* Top Canvas Scratch Layer */}
+              {/* Top Canvas Scratch Layer (Fix 5: touch-none, e.preventDefault()) */}
               <canvas
                 ref={canvasRef}
                 width={340}
@@ -374,9 +373,9 @@ export default function ScratchPage() {
             </div>
 
             {/* Progress / Status below Card */}
-            <div className="mt-4 text-center">
+            <div className="mt-4 text-center w-full max-w-[340px]">
               {!isRevealed ? (
-                <div className="flex items-center gap-2 bg-black/30 px-4 py-2 rounded-full border border-white/10">
+                <div className="flex items-center justify-center gap-2 bg-black/30 px-4 py-2 rounded-full border border-white/10">
                   <div className="w-20 bg-white/20 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-[#FFC93C] h-full transition-all duration-200"
@@ -388,12 +387,12 @@ export default function ScratchPage() {
                   </span>
                 </div>
               ) : (
-                <button
-                  onClick={() => router.push('/play')}
-                  className="px-8 py-3 bg-[#FFC93C] text-[#B92429] font-['Anton',sans-serif] text-base uppercase tracking-wider rounded-full hover:brightness-110 active:scale-95 transition-transform shadow-lg"
+                <Link
+                  href="/play"
+                  className="inline-block w-full py-3.5 bg-[#FFC93C] text-[#3D0B0E] font-['Anton',sans-serif] text-base uppercase tracking-wider rounded-full hover:brightness-110 active:scale-95 transition-transform shadow-lg text-center cursor-pointer"
                 >
-                  Back to Games
-                </button>
+                  BACK TO PLAY
+                </Link>
               )}
             </div>
           </div>
