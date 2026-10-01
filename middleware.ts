@@ -1,33 +1,24 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 
-// NOTE: We use status 307 (Temporary Redirect) instead of 301 or 308.
-// The main zeesip.com domain will later host the official Zee Sip brand website,
-// so this redirect is temporary while the coming-soon rewards campaign is active
-// and must NOT be cached permanently by browsers or CDNs.
+// Main domain temporarily redirects to Rewards.
+// MUST stay 307 (temporary). Never 301/308 — the main domain will later
+// host the official Zee Sip website, and permanent redirects get cached
+// in customers' browsers forever.
+const MAIN_HOSTS = ['zeesip.com', 'www.zeesip.com'];
+const REWARDS_ORIGIN = 'https://rewards.zeesip.com';
 
-export function middleware(request: NextRequest) {
-  const hostHeader = request.headers.get("host") || "";
-  // Strip any port number from host header before comparing (e.g. zeesip.com:3000 -> zeesip.com)
-  const host = hostHeader.split(":")[0].toLowerCase();
+export function middleware(req: NextRequest) {
+  const host = (req.headers.get('host') || '').split(':')[0].toLowerCase();
 
-  if (host === "zeesip.com" || host === "www.zeesip.com") {
-    const url = request.nextUrl.clone();
-    url.hostname = "rewards.zeesip.com";
-    url.protocol = "https";
-    url.port = "";
-
-    // Add query param src=bottle_qr if src is not already present
-    if (!url.searchParams.has("src")) {
-      url.searchParams.set("src", "bottle_qr");
-    }
-
-    return NextResponse.redirect(url, 307);
+  if (MAIN_HOSTS.includes(host)) {
+    const target = new URL(req.nextUrl.pathname + req.nextUrl.search, REWARDS_ORIGIN);
+    if (!target.searchParams.has('src')) target.searchParams.set('src', 'bottle_qr');
+    return NextResponse.redirect(target, 307);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: "/((?!_next/static|_next/image|favicon.ico).*)",
+  matcher: '/((?!_next/static|_next/image|favicon.ico).*)',
 };
