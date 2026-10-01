@@ -1,12 +1,12 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
-import { FireIcon, MiniWheelIcon } from '@/components/Icons';
+import { CheckIcon, FireIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
 
 interface HistoryEntry {
@@ -20,12 +20,18 @@ interface HistoryEntry {
 export default function HomePage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>('Sipper');
-  const [userTeam, setUserTeam] = useState<string>('mango');
   const [balance, setBalance] = useState<number | null>(null);
   const [target] = useState<number>(250);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+
+  // Task Completion States
+  const [isProfileDone, setIsProfileDone] = useState<boolean>(false);
+  const [isAddressDone, setIsAddressDone] = useState<boolean>(false);
+  const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
+  const [isSpinDoneToday, setIsSpinDoneToday] = useState<boolean>(false);
+  const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
   useEffect(() => {
     const supabase = createClient();
@@ -38,7 +44,12 @@ export default function HomePage() {
 
       setUserName(user.user_metadata?.full_name?.split(' ')[0] || 'Sipper');
 
-      // Fetch profile
+      // Prefetch routes for fast navigation
+      router.prefetch('/profile');
+      router.prefetch('/play');
+      router.prefetch('/rewards');
+
+      // Fetch profile & check tasks
       supabase
         .from('profiles')
         .select('*')
@@ -49,17 +60,17 @@ export default function HomePage() {
             if (profile.display_name) {
               setUserName(profile.display_name.split(' ')[0]);
             }
-            if (profile.team) {
-              setUserTeam(profile.team);
-            }
-            // If profile is incomplete, redirect to /profile
-            if (!profile.phone_number || !profile.team) {
-              router.push('/profile');
-            }
+            const profileDone = Boolean(profile.display_name && profile.phone_number && profile.pincode);
+            const addressDone = Boolean(profile.address_line1 && profile.city && profile.state && profile.pincode);
+            const teamDone = Boolean(profile.team);
+
+            setIsProfileDone(profileDone);
+            setIsAddressDone(addressDone);
+            setIsTeamDone(teamDone);
           }
         });
 
-      // Fetch balance from API asynchronously
+      // Fetch balance from API
       fetch('/api/balance')
         .then((res) => res.json())
         .then((data) => {
@@ -72,59 +83,62 @@ export default function HomePage() {
         })
         .catch(() => setBalance(0));
 
-      // Fetch history entries
+      // Fetch today's spin check & today's coins
+      const todayStr = new Date().toISOString().split('T')[0];
+
       supabase
         .from('coin_ledger')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .then(({ data: ledger }) => {
-          if (ledger) setHistoryEntries(ledger as HistoryEntry[]);
+          if (ledger) {
+            setHistoryEntries(ledger as HistoryEntry[]);
+            
+            // Calculate coins earned today
+            const todayEntries = ledger.filter(
+              (item) => item.created_at.startsWith(todayStr) && item.amount > 0
+            );
+            const todaySum = todayEntries.reduce((sum, item) => sum + item.amount, 0);
+            setCoinsEarnedToday(todaySum);
+
+            // Check if daily spin done today
+            const spunToday = ledger.some(
+              (item) => item.source === 'DAILY_SPIN' && item.created_at.startsWith(todayStr)
+            );
+            setIsSpinDoneToday(spunToday);
+          }
         });
     });
   }, [router]);
 
-  const currentBalance = balance ?? 50; // Optimistic initial fallback
+  const currentBalance = balance ?? 50;
   const remainingCoins = Math.max(0, target - currentBalance);
+
+  const handleBottleScanClick = () => {
+    alert('Bottle Verification is unlocking in Phase 2! Stay tuned.');
+  };
 
   return (
     <main className="min-h-[100dvh] w-full bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative">
       <div>
-        {/* Top Yellow Band (~170px) */}
+        {/* Top Yellow Band */}
         <div className="w-full bg-[#FFC93C] text-[#3D0B0E] pb-5 border-b-4 border-[#3D0B0E]">
           <Header variant="yellow" />
 
-          {/* Greeting & Streak Badge */}
-          <div className="px-5 pt-1 flex items-center justify-between">
-            <h1 className="text-[32px] font-anton text-[#B92429] leading-tight uppercase tracking-tight">
+          {/* Greeting */}
+          <div className="px-5 pt-1">
+            <h1 className="text-[36px] font-anton text-[#B92429] leading-tight uppercase tracking-tight">
               HEY {userName}!
             </h1>
-
-            {/* Streak Badge */}
-            <div className="bg-white rounded-full px-3 py-1 flex items-center gap-1.5 shadow-sm border border-[#3D0B0E]/10">
-              <FireIcon size={18} />
-              <span className="text-[12px] font-extrabold text-[#3D0B0E]">
-                0 days
-              </span>
-            </div>
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="px-5 -mt-6 flex flex-col gap-4 relative z-10">
-          {/* COIN CARD (Brand-red bg, white text) */}
+        {/* Main Content */}
+        <div className="px-5 -mt-6 flex flex-col gap-5 relative z-10">
+          {/* RED "YOUR SIP COINS" CARD */}
           <div className="w-full bg-[#B92429] text-white rounded-[24px] p-5 shadow-xl relative overflow-hidden">
-            {/* Right Side: Faint Zee Sip Logo Watermark */}
-            <img
-              src="/zeesip-logo.png"
-              alt="Zee Sip Logo Watermark"
-              width={160}
-              height={160}
-              style={{ borderRadius: '50%', objectFit: 'cover' }}
-              className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none"
-            />
-
-            {/* Card Header: Label + HISTORY Link */}
+            {/* Header: Label + HISTORY Link */}
             <div className="flex items-center justify-between z-10 relative">
               <span className="text-[11px] font-extrabold text-white/80 tracking-widest uppercase">
                 YOUR SIP COINS
@@ -137,7 +151,7 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Balance Hero: Left side small gold coin SVG (size ~44px) + number */}
+            {/* Balance Hero: Left gold coin SVG (~44px) + balance number */}
             <div className="flex items-center gap-3 my-3 z-10 relative">
               <CoinIcon size={44} />
               {balance === null ? (
@@ -165,91 +179,172 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* TODAY'S SPIN IS READY CARD (Phase 2 Preview) */}
-          <div className="w-full bg-white rounded-[22px] p-4 shadow-md border border-[#F4D2CF] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-[16px] bg-[#FFC93C]/30 flex items-center justify-center text-[#3D0B0E]">
-                <MiniWheelIcon size={28} />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-anton text-[18px] text-[#3D0B0E] leading-none uppercase">
-                  DAILY SPIN
+          {/* THINGS TO DO SECTION */}
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[26px] font-anton text-[#B92429] uppercase tracking-wide">
+              THINGS TO DO
+            </h2>
+
+            <div className="flex flex-col gap-2.5">
+              {/* Task 1: Complete profile */}
+              <Link
+                href="/profile"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isProfileDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isProfileDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isProfileDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Complete your profile
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isProfileDone ? 'Completed ✓' : 'Add name, phone & pincode'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +10 coins
                 </span>
-                <span className="text-[11px] font-bold text-[#7A4547] mt-0.5">
-                  Win up to 50 coins
+              </Link>
+
+              {/* Task 2: Add delivery address */}
+              <Link
+                href="/profile"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isAddressDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isAddressDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isAddressDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Add delivery address
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isAddressDone ? 'Completed ✓' : 'Required to receive rewards'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +10 coins
                 </span>
-              </div>
+              </Link>
+
+              {/* Task 3: Pick your team */}
+              <Link
+                href="/profile"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isTeamDone ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isTeamDone
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isTeamDone && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Pick your team
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isTeamDone ? 'Completed ✓' : 'Team Mango or Team Pineapple'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +5 coins
+                </span>
+              </Link>
+
+              {/* Task 4: Spin the wheel */}
+              <Link
+                href="/play"
+                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
+                  isSpinDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                      isSpinDoneToday
+                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
+                        : 'border-[#3D0B0E]/30 bg-transparent'
+                    }`}
+                  >
+                    {isSpinDoneToday && <CheckIcon size={14} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Spin the wheel
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      {isSpinDoneToday ? 'Done today ✓' : 'Daily spin available'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  up to +50
+                </span>
+              </Link>
+
+              {/* Task 5: Scan a Zee Sip bottle */}
+              <button
+                type="button"
+                onClick={handleBottleScanClick}
+                className="w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-[#B92429] flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full border-2 border-[#3D0B0E]/30 bg-transparent" />
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
+                      Scan a Zee Sip bottle
+                    </span>
+                    <span className="text-[10px] font-bold text-[#7A4547]">
+                      Scan QR on any bottle
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
+                  +25 coins
+                </span>
+              </button>
             </div>
-            <button
-              onClick={() => alert('Daily Spins unlock in Phase 2!')}
-              className="px-4 py-2 rounded-[14px] bg-[#FFC93C] text-[#3D0B0E] font-anton text-[14px] uppercase shadow-sm cursor-pointer hover:bg-[#FFE14D]"
-            >
-              SPIN
-            </button>
           </div>
 
-          {/* 2-COLUMN GRID: VERIFIED SIPS + SIP STREAK */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Verified Sips Card */}
-            <div className="bg-[#CDEE1C] rounded-[22px] p-4 shadow-sm border border-[#3D0B0E]/10 flex flex-col justify-between h-[110px]">
-              <span className="text-[11px] font-extrabold text-[#3D0B0E]/80 tracking-wider uppercase">
-                VERIFIED SIPS
-              </span>
-              <div className="flex items-baseline justify-between">
-                <span className="font-anton text-[36px] text-[#3D0B0E] leading-none">
-                  0
-                </span>
-                <span className="text-[11px] font-extrabold text-[#3D0B0E]/70">
-                  Bottles
-                </span>
-              </div>
-            </div>
-
-            {/* Sip Streak Card */}
-            <div className="bg-white rounded-[22px] p-4 shadow-sm border border-[#F4D2CF] flex flex-col justify-between h-[110px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-                  SIP STREAK
-                </span>
-                <FireIcon size={16} />
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="font-anton text-[36px] text-[#3D0B0E] leading-none">
-                  0
-                </span>
-                <span className="text-[11px] font-bold text-[#7A4547]">
-                  Days
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* WHICH SIP RULES? FLAVOUR BATTLE BAR (58% Mango / 42% Pineapple) */}
-          <div className="w-full bg-white rounded-[22px] p-4 shadow-md border border-[#F4D2CF] flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-extrabold text-[#3D0B0E] uppercase tracking-wider flex items-center gap-1.5">
-                <span>WHICH SIP RULES?</span>
-                <span className="text-[10px] text-[#7A4547] lowercase font-bold">(Battle)</span>
-              </span>
-              <span className="text-[11px] font-extrabold text-[#7A4547]">
-                Your Team: <strong className="uppercase text-[#B92429]">{userTeam}</strong>
+          {/* BOTTOM ACTIVITY MINI SUMMARY */}
+          <div className="w-full bg-white/80 rounded-[16px] p-3.5 border border-[#F4D2CF] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CoinIcon size={20} />
+              <span className="text-[12px] font-extrabold text-[#3D0B0E]">
+                {coinsEarnedToday} coins earned today
               </span>
             </div>
-
-            {/* Dual Flavour Progress Bar */}
-            <div className="w-full h-5 rounded-full overflow-hidden flex border border-[#3D0B0E]/15 shadow-inner">
-              <div
-                className="bg-[#CDEE1C] h-full flex items-center justify-start pl-2 text-[10px] font-extrabold text-[#3D0B0E]"
-                style={{ width: '58%' }}
-              >
-                Mango 58%
-              </div>
-              <div
-                className="bg-[#FFE14D] h-full flex items-center justify-end pr-2 text-[10px] font-extrabold text-[#3D0B0E]"
-                style={{ width: '42%' }}
-              >
-                Pineapple 42%
-              </div>
+            <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#7A4547]">
+              <FireIcon size={16} />
+              <span>1 day streak</span>
             </div>
           </div>
         </div>

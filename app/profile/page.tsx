@@ -1,22 +1,34 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
+import { BottomNav } from '@/components/BottomNav';
 import { MangoIcon, PineappleIcon, WarningTriangleIcon, CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
   const [displayName, setDisplayName] = useState<string>('');
   const [pincode, setPincode] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [team, setTeam] = useState<'mango' | 'pineapple' | null>(null);
   const [whatsappConsent, setWhatsappConsent] = useState<boolean>(true);
+
+  // Delivery Address Fields
+  const [deliveryName, setDeliveryName] = useState<string>('');
+  const [addressLine1, setAddressLine1] = useState<string>('');
+  const [addressLine2, setAddressLine2] = useState<string>('');
+  const [city, setCity] = useState<string>('');
+  const [state, setState] = useState<string>('Kerala');
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -28,11 +40,10 @@ export default function ProfilePage() {
 
       setUserEmail(user.email || '');
       setDisplayName(user.user_metadata?.full_name || user.user_metadata?.name || '');
+      setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
+      setDeliveryName(user.user_metadata?.full_name || user.user_metadata?.name || '');
 
-      // Prefetch home page for instant navigation
-      router.prefetch('/home');
-
-      // Check if profile already exists
+      // Check if profile exists
       supabase
         .from('profiles')
         .select('*')
@@ -45,11 +56,24 @@ export default function ProfilePage() {
             if (profile.phone_number) setPhone(profile.phone_number);
             if (profile.team) setTeam(profile.team as 'mango' | 'pineapple');
             if (profile.whatsapp_consent !== undefined) setWhatsappConsent(profile.whatsapp_consent);
+            if (profile.delivery_name) setDeliveryName(profile.delivery_name);
+            if (profile.address_line1) setAddressLine1(profile.address_line1);
+            if (profile.address_line2) setAddressLine2(profile.address_line2);
+            if (profile.city) setCity(profile.city);
+            if (profile.state) setState(profile.state);
 
-            // If profile is already fully complete, redirect to home
-            if (profile.phone_number && profile.team && profile.pincode) {
-              router.push('/home');
-              return;
+            // Auto-check completed profile bonus
+            if (profile.display_name && profile.phone_number && profile.pincode && !profile.completed_tasks?.profile_completed) {
+              fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  display_name: profile.display_name,
+                  pincode: profile.pincode,
+                  phone_number: profile.phone_number,
+                  team: profile.team,
+                }),
+              }).catch(() => {});
             }
           }
           setIsLoading(false);
@@ -62,6 +86,7 @@ export default function ProfilePage() {
     if (isSubmitting) return;
 
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     // Validation
     if (!displayName.trim()) {
@@ -69,19 +94,14 @@ export default function ProfilePage() {
       return;
     }
 
-    if (!/^\d{6}$/.test(pincode.trim())) {
+    if (pincode && !/^\d{6}$/.test(pincode.trim())) {
       setErrorMsg('Pincode must be exactly 6 digits');
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-    if (!/^\d{10}$/.test(cleanPhone)) {
+    const cleanPhone = phone ? phone.replace(/\D/g, '').slice(-10) : '';
+    if (phone && !/^\d{10}$/.test(cleanPhone)) {
       setErrorMsg('Please enter a valid 10-digit WhatsApp phone number');
-      return;
-    }
-
-    if (!team) {
-      setErrorMsg('Please pick your team (Team Mango or Team Pineapple)');
       return;
     }
 
@@ -97,6 +117,11 @@ export default function ProfilePage() {
           phone_number: cleanPhone,
           team,
           whatsapp_consent: whatsappConsent,
+          delivery_name: deliveryName.trim() || displayName.trim(),
+          address_line1: addressLine1.trim(),
+          address_line2: addressLine2.trim(),
+          city: city.trim(),
+          state: state.trim() || 'Kerala',
         }),
       });
 
@@ -108,11 +133,22 @@ export default function ProfilePage() {
         return;
       }
 
-      router.push('/home');
+      setSuccessMsg(
+        data.newlyAwardedCoins > 0
+          ? `Profile saved! You earned +${data.newlyAwardedCoins} bonus coins! 🎉`
+          : 'Profile saved successfully!'
+      );
+      setIsSubmitting(false);
     } catch {
       setErrorMsg('Connection error. Please try again.');
       setIsSubmitting(false);
     }
+  };
+
+  const handleLogOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/');
   };
 
   if (isLoading) {
@@ -130,43 +166,57 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-[100dvh] w-full bg-white text-[#3D0B0E] flex flex-col justify-between pb-6 select-none">
-      {/* Top Header */}
+    <main className="min-h-[100dvh] w-full bg-white text-[#3D0B0E] flex flex-col justify-between pb-24 select-none">
       <div>
         <Header variant="red" />
 
-        {/* Top Badges */}
-        <div className="px-5 pt-2 flex items-center justify-between">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#CDEE1C] text-[#3D0B0E] text-[11px] font-extrabold shadow-sm">
-            <CheckIcon size={14} className="text-[#3D0B0E]" />
-            <span>{userEmail || 'Google Verified'}</span>
-          </div>
-          <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-            LAST STEP
-          </span>
-        </div>
+        {/* Profile Header Card */}
+        <div className="px-5 pt-3 flex items-center gap-4 border-b border-[#F4D2CF] pb-4">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              className="w-16 h-16 rounded-full border-2 border-[#B92429] shadow-md object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-[#B92429] text-white font-anton text-[28px] flex items-center justify-center border-2 border-[#3D0B0E]">
+              {displayName.slice(0, 1).toUpperCase() || 'Z'}
+            </div>
+          )}
 
-        {/* Title & Subtext */}
-        <div className="px-5 pt-3">
-          <h1 className="text-[44px] font-anton text-[#B92429] leading-none tracking-tight uppercase">
-            MAKE IT YOURS
-          </h1>
-          <p className="text-[13px] font-bold text-[#7A4547] mt-1">
-            Your 50 coins are safe. Just a few details.
-          </p>
+          <div className="flex flex-col">
+            <h1 className="text-[24px] font-anton text-[#B92429] leading-tight uppercase">
+              {displayName || 'Zee Sipper'}
+            </h1>
+            <span className="text-[12px] font-bold text-[#7A4547] flex items-center gap-1">
+              <CheckIcon size={14} className="text-[#8FC31F]" />
+              {userEmail}
+            </span>
+          </div>
         </div>
 
         {/* Form Container */}
-        <form onSubmit={handleSubmit} className="px-5 pt-4 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="px-5 pt-5 flex flex-col gap-6">
           {errorMsg && (
-            <div className="p-3 rounded-[12px] bg-[#B92429]/10 border border-[#B92429]/30 text-[#B92429] text-xs font-bold">
+            <div className="p-3 rounded-[14px] bg-[#B92429]/10 border border-[#B92429]/30 text-[#B92429] text-xs font-bold">
               {errorMsg}
             </div>
           )}
 
-          {/* 2-Column Grid: YOUR NAME + PINCODE */}
-          <div className="grid grid-cols-5 gap-3">
-            <div className="col-span-3 flex flex-col gap-1">
+          {successMsg && (
+            <div className="p-3 rounded-[14px] bg-[#8FC31F]/15 border border-[#8FC31F]/40 text-[#3D0B0E] text-xs font-extrabold">
+              {successMsg}
+            </div>
+          )}
+
+          {/* SECTION 1: PERSONAL DETAILS */}
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-anton text-[#B92429] uppercase tracking-wide">
+              PERSONAL DETAILS
+            </h2>
+
+            {/* Display Name */}
+            <div className="flex flex-col gap-1">
               <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
                 YOUR NAME
               </label>
@@ -180,7 +230,36 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div className="col-span-2 flex flex-col gap-1">
+            {/* WhatsApp Number */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                WHATSAPP NUMBER
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3.5 font-extrabold text-[14px] text-[#7A4547]">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                  placeholder="9876543210"
+                  className="w-full h-[48px] pl-13 pr-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                />
+              </div>
+            </div>
+
+            {/* RED WARNING BOX */}
+            <div className="bg-[#B92429] text-white rounded-[14px] p-3 flex items-start gap-2.5 shadow-md">
+              <WarningTriangleIcon size={26} className="mt-0.5 shrink-0" />
+              <p className="text-[11.5px] font-bold leading-tight">
+                Use your real number. We&apos;ll contact you on WhatsApp to deliver your rewards. Wrong numbers can&apos;t claim rewards.
+              </p>
+            </div>
+
+            {/* Pincode */}
+            <div className="flex flex-col gap-1">
               <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
                 PINCODE
               </label>
@@ -190,46 +269,104 @@ export default function ProfilePage() {
                 value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
                 placeholder="673001"
-                required
                 className="w-full h-[48px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
               />
             </div>
           </div>
 
-          {/* WHATSAPP NUMBER FIELD */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              WHATSAPP NUMBER
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3.5 font-extrabold text-[14px] text-[#7A4547]">
-                +91
+          {/* SECTION 2: DELIVERY ADDRESS */}
+          <div className="flex flex-col gap-3 pt-2 border-t border-[#F4D2CF]">
+            <div className="flex flex-col">
+              <h2 className="text-[18px] font-anton text-[#B92429] uppercase tracking-wide">
+                DELIVERY ADDRESS
+              </h2>
+              <span className="text-[11px] font-bold text-[#7A4547]">
+                Required to receive your Zee Sip rewards (+10 coins bonus)
               </span>
-              <input
-                type="tel"
-                maxLength={10}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                placeholder="9876543210"
-                required
-                className="w-full h-[48px] pl-13 pr-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
-              />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {/* Full Name for Delivery */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                  FULL NAME FOR DELIVERY
+                </label>
+                <input
+                  type="text"
+                  value={deliveryName}
+                  onChange={(e) => setDeliveryName(e.target.value)}
+                  placeholder="Full recipient name"
+                  className="w-full h-[46px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                />
+              </div>
+
+              {/* Address Line 1 */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                  ADDRESS LINE 1 (HOUSE/BUILDING/STREET)
+                </label>
+                <input
+                  type="text"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="Flat 4B, Emerald Heights, Beach Road"
+                  className="w-full h-[46px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                />
+              </div>
+
+              {/* Address Line 2 */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                  ADDRESS LINE 2 (AREA/LANDMARK - OPTIONAL)
+                </label>
+                <input
+                  type="text"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="Near Calicut Beach Park"
+                  className="w-full h-[46px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                />
+              </div>
+
+              {/* City & State Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                    CITY
+                  </label>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Kozhikode"
+                    className="w-full h-[46px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                    STATE
+                  </label>
+                  <input
+                    type="text"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    placeholder="Kerala"
+                    className="w-full h-[46px] px-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* RED WARNING BOX */}
-          <div className="bg-[#B92429] text-white rounded-[14px] p-3 flex items-start gap-2.5 shadow-md">
-            <WarningTriangleIcon size={26} className="mt-0.5 shrink-0" />
-            <p className="text-[11.5px] font-bold leading-tight">
-              Use your real number. We&apos;ll contact you on WhatsApp to deliver your rewards. Wrong numbers can&apos;t claim rewards.
-            </p>
-          </div>
+          {/* SECTION 3: YOUR TEAM */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-[#F4D2CF]">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+                YOUR TEAM (+5 coins bonus)
+              </label>
+            </div>
 
-          {/* PICK YOUR TEAM */}
-          <div className="flex flex-col gap-1.5 mt-1">
-            <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              PICK YOUR TEAM
-            </label>
             <div className="grid grid-cols-2 gap-3">
               {/* Team Mango */}
               <button
@@ -247,7 +384,7 @@ export default function ProfilePage() {
                     TEAM MANGO
                   </span>
                   <span className="text-[10px] font-extrabold text-[#3D0B0E]/80">
-                    Raw & Tangy 🥭
+                    Raw & Tangy
                   </span>
                 </div>
               </button>
@@ -268,7 +405,7 @@ export default function ProfilePage() {
                     TEAM PINEAPPLE
                   </span>
                   <span className="text-[10px] font-extrabold text-[#3D0B0E]/80">
-                    Sweet & Punchy 🍍
+                    Sweet & Punchy
                   </span>
                 </div>
               </button>
@@ -276,7 +413,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Checkbox: WhatsApp Consent */}
-          <label className="flex items-start gap-2.5 mt-1 cursor-pointer select-none">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={whatsappConsent}
@@ -288,23 +425,35 @@ export default function ProfilePage() {
             </span>
           </label>
 
-          {/* Primary CTA Button: START COLLECTING */}
+          {/* Primary CTA Button: SAVE CHANGES */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-[62px] bg-[#B92429] hover:bg-[#7A1418] active:scale-[0.98] text-white font-anton text-[24px] uppercase rounded-[18px] shadow-[0_10px_22px_rgba(185,36,41,0.3)] transition-all mt-2 cursor-pointer disabled:opacity-75 flex items-center justify-center gap-2"
+            className="w-full h-[60px] bg-[#B92429] hover:bg-[#7A1418] active:scale-[0.98] text-white font-anton text-[22px] uppercase rounded-[18px] shadow-md transition-all cursor-pointer disabled:opacity-75 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>SAVING PROFILE...</span>
+                <span>SAVING CHANGES...</span>
               </>
             ) : (
-              'START COLLECTING'
+              'SAVE CHANGES'
             )}
+          </button>
+
+          {/* Secondary CTA Button: LOG OUT */}
+          <button
+            type="button"
+            onClick={handleLogOut}
+            className="w-full py-3 bg-[#FFF5F3] hover:bg-[#FCE4E1] text-[#7A4547] font-bold text-[14px] uppercase rounded-[14px] border border-[#F4D2CF] transition-colors cursor-pointer mt-1"
+          >
+            LOG OUT
           </button>
         </form>
       </div>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
     </main>
   );
 }

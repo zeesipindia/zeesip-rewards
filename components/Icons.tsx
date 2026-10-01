@@ -86,3 +86,34 @@ export const CheckIcon: React.FC<{ className?: string; size?: number }> = ({ cla
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
+
+export const CameraIcon: React.FC<{ className?: string; size?: number }> = ({ className = '', size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <circle cx="12" cy="13" r="4" />
+  </svg>
+);
+
+export const ZapIcon: React.FC<{ className?: string; size?: number }> = ({ className = '', size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+export const TicketIcon: React.FC<{ className?: string; size?: number }> = ({ className = '', size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M2 9a3 3 0 0 1 0 6v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a3 3 0 0 1 0-6V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4z" />
+    <line x1="9" y1="12" x2="15" y2="12" />
+  </svg>
+);
+
+export const SlotsIcon: React.FC<{ className?: string; size?: number }> = ({ className = '', size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="2" y="4" width="20" height="16" rx="3" />
+    <line x1="8" y1="4" x2="8" y2="20" />
+    <line x1="16" y1="4" x2="16" y2="20" />
+    <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+  </svg>
+);

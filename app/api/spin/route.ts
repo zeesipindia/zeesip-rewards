@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { getGuestSessionIdFromCookies, setGuestSessionCookie } from '@/lib/cookies';
 
-interface GuestSession {
+interface SpinSegment {
+  label: string;
+  value: number;
+  probability: number;
+}
+
+interface EventRow {
+  metadata: { value?: number; segment_index?: number } | null;
+  created_at: string;
+}
+
+interface GuestSessionRow {
   id: string;
   device_fingerprint: string | null;
   coins_won: number;
@@ -13,66 +25,133 @@ interface GuestSession {
   created_at: string;
 }
 
-interface SpinSegment {
-  label: string;
-  value: number;
-  probability: number;
-}
-
-// In-memory rate limiter: max 10 requests per minute per IP
-const ipMap = new Map<string, { count: number; resetTime: number }>();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxLimit = 10;
-
-  const record = ipMap.get(ip);
-  if (!record || now > record.resetTime) {
-    ipMap.set(ip, { count: 1, resetTime: now + windowMs });
-    return false;
-  }
-
-  if (record.count >= maxLimit) {
-    return true;
-  }
-
-  record.count += 1;
-  return false;
-}
-
-const SEGMENTS = [
-  { label: '+25', value: 25, probability: 0.25 },
-  { label: '+30', value: 30, probability: 0.25 },
-  { label: '+35', value: 35, probability: 0.20 },
-  { label: '+40', value: 40, probability: 0.15 },
-  { label: '+50', value: 50, probability: 0.15 },
+const SEGMENTS: SpinSegment[] = [
+  { label: '+25', value: 25, probability: 0.20 },
+  { label: '+30', value: 30, probability: 0.20 },
+  { label: '+35', value: 35, probability: 0.15 },
+  { label: '+40', value: 40, probability: 0.10 },
+  { label: '+50', value: 50, probability: 0.05 },
+  { label: 'OOPS', value: 0, probability: 0.30 },
 ];
 
 export async function POST(req: NextRequest) {
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown-ip';
-  
-  if (checkRateLimit(clientIp)) {
-    return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 });
+  const supabaseAdmin = createAdminClient();
+  const serverSupabase = await createClient();
+
+  const { data: { user } } = await serverSupabase.auth.getUser();
+
+  // If user is authenticated, handle Daily Spin
+  if (user) {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check if user has already spun today
+    const { data: todaySpins } = await supabaseAdmin
+      .from('coin_ledger')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .eq('source', 'DAILY_SPIN')
+      .gte('created_at', `${today}T00:00:00.000Z`)
+      .lte('created_at', `${today}T23:59:59.999Z`);
+
+    if (todaySpins && todaySpins.length > 0) {
+      return NextResponse.json(
+        { error: 'You have already used your daily spin today. Come back tomorrow!' },
+        { status: 409 }
+      );
+    }
+
+    // Fetch user's spin history
+    const { data: userSpins } = await supabaseAdmin
+      .from('events')
+      .select('metadata, created_at')
+      .eq('user_id', user.id)
+      .eq('event_type', 'DAILY_SPIN_COMPLETED')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const typedSpins = (userSpins || []) as EventRow[];
+    const spinCount = typedSpins.length;
+    const lastSpinValues = typedSpins.map((s) => Number(s.metadata?.value ?? 0));
+
+    // PSYCHOLOGY RULES:
+    // Rule 4: New user warmth (first 3 daily spins NEVER give 0 OOPS)
+    const allowOops = spinCount >= 3;
+
+    // Rule 2: Streak protection (max 2 OOPS in a row; if last 2 were 0, force a win)
+    const lastTwoWereOops = lastSpinValues.length >= 2 && lastSpinValues[0] === 0 && lastSpinValues[1] === 0;
+    const forceWin = lastTwoWereOops;
+
+    // Rule 3: Win after drought (if last 5 spins had no win > 25, double weight of 40 and 50)
+    const hasHighWinInLastFive = lastSpinValues.some((v) => v > 25);
+    const droughtBoost = !hasHighWinInLastFive && spinCount >= 5;
+
+    // Calculate dynamic weights for segments
+    const weightedSegments = SEGMENTS.map((seg) => {
+      let weight = seg.probability;
+
+      if (seg.value === 0) {
+        if (!allowOops || forceWin) weight = 0;
+      } else if (droughtBoost && (seg.value === 40 || seg.value === 50)) {
+        weight = weight * 2;
+      }
+      return { ...seg, weight };
+    });
+
+    const totalWeight = weightedSegments.reduce((sum, s) => sum + s.weight, 0);
+    let random = Math.random() * totalWeight;
+    let selectedSegment = weightedSegments[0];
+
+    for (const seg of weightedSegments) {
+      if (random <= seg.weight) {
+        selectedSegment = seg;
+        break;
+      }
+      random -= seg.weight;
+    }
+
+    const winningValue = selectedSegment.value;
+    const segmentIndex = SEGMENTS.findIndex((s) => s.value === winningValue);
+
+    // Record in coin_ledger if winningValue > 0
+    if (winningValue > 0) {
+      await supabaseAdmin.from('coin_ledger').insert({
+        user_id: user.id,
+        amount: winningValue,
+        source: 'DAILY_SPIN',
+        description: `Daily spin reward (+${winningValue} coins)`,
+      });
+    }
+
+    // Log event
+    await supabaseAdmin.from('events').insert({
+      user_id: user.id,
+      event_type: 'DAILY_SPIN_COMPLETED',
+      metadata: { value: winningValue, segment_index: segmentIndex },
+    });
+
+    return NextResponse.json({
+      segment_index: segmentIndex,
+      value: winningValue,
+    });
   }
 
-  const supabase = createAdminClient();
+  // --- GUEST SPIN FLOW ---
   let sessionId = await getGuestSessionIdFromCookies();
-  let sessionData: GuestSession | null = null;
+  let sessionData: GuestSessionRow | null = null;
 
   if (sessionId) {
-    const { data } = await supabase
+    const { data } = await supabaseAdmin
       .from('guest_sessions')
       .select('*')
       .eq('id', sessionId)
       .single();
-    sessionData = data;
+    sessionData = data as GuestSessionRow | null;
   }
 
-  // Create new session if none exists or invalid
   if (!sessionId || !sessionData) {
     const userAgent = req.headers.get('user-agent') || '';
-    const { data: newSession, error: createError } = await supabase
+    const { data: newSession, error: createError } = await supabaseAdmin
       .from('guest_sessions')
       .insert({ device_fingerprint: `${clientIp}-${userAgent.slice(0, 50)}` })
       .select()
@@ -83,13 +162,12 @@ export async function POST(req: NextRequest) {
     }
 
     sessionId = newSession.id;
-    sessionData = newSession;
+    sessionData = newSession as GuestSessionRow;
     await setGuestSessionCookie(newSession.id);
   }
 
   const activeSessionId: string = sessionId!;
 
-  // Check if session already spun
   if (sessionData?.spun_at) {
     return NextResponse.json(
       { error: 'You have already used your spin for this session' },
@@ -97,51 +175,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Log GUEST_SPIN_STARTED event
-  await supabase.from('events').insert({
+  await supabaseAdmin.from('events').insert({
     session_id: activeSessionId,
     event_type: 'GUEST_SPIN_STARTED',
     metadata: { ip: clientIp },
   });
 
-  // Fetch game config
-  const { data: configData } = await supabase
-    .from('game_config')
-    .select('*')
-    .eq('id', 1)
-    .single();
+  // First guest spin ALWAYS gives 50
+  const winningValue = 50;
+  const segmentIndex = SEGMENTS.findIndex((s) => s.value === winningValue);
 
-  const guaranteedVal = configData?.first_spin_guaranteed_value ?? 50;
-  const segments = configData?.spin_segments || SEGMENTS;
-
-  // Decide spin result on server
-  // Guaranteed first spin returns 50 coins!
-  const winningValue = guaranteedVal;
-
-  // Find matching segment index
-  let segmentIndex = segments.findIndex((s: SpinSegment) => s.value === winningValue);
-  if (segmentIndex === -1) {
-    segmentIndex = 4; // Fallback to index 4 (+50)
-  }
-
-  const spunAt = new Date().toISOString();
-
-  // Update guest session
-  const { error: updateError } = await supabase
+  await supabaseAdmin
     .from('guest_sessions')
     .update({
       spin_result: winningValue,
       coins_won: winningValue,
-      spun_at: spunAt,
+      spun_at: new Date().toISOString(),
     })
     .eq('id', activeSessionId);
 
-  if (updateError) {
-    return NextResponse.json({ error: 'Failed to record spin' }, { status: 500 });
-  }
-
-  // Log GUEST_SPIN_COMPLETED event
-  await supabase.from('events').insert({
+  await supabaseAdmin.from('events').insert({
     session_id: activeSessionId,
     event_type: 'GUEST_SPIN_COMPLETED',
     metadata: { value: winningValue, segment_index: segmentIndex },

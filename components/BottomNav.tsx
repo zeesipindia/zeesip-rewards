@@ -22,35 +22,39 @@ export const BottomNav: React.FC = () => {
       </Link>
 
       {/* Play */}
-      <button
-        onClick={() => alert('Daily games coming in Phase 2!')}
-        className="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] text-[#7A4547]"
+      <Link
+        href="/play"
+        className={`flex flex-col items-center justify-center min-w-[44px] min-h-[44px] ${
+          pathname === '/play' ? 'text-[#B92429]' : 'text-[#7A4547]'
+        }`}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <circle cx="12" cy="12" r="10" />
           <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
         </svg>
         <span className="text-[10px] font-bold mt-0.5">Play</span>
-      </button>
+      </Link>
 
       {/* Raised Centre Button: Verify */}
       <div className="relative -top-4 flex flex-col items-center">
-        <button
-          onClick={() => alert('Bottle verification coming soon!')}
+        <Link
+          href="/verify"
           className="w-14 h-14 rounded-full bg-[#FFC93C] text-[#3D0B0E] border-4 border-white shadow-xl flex items-center justify-center font-black active:scale-95 transition-transform"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <path d="M9 12l2 2 4-4" />
           </svg>
-        </button>
+        </Link>
         <span className="text-[10px] font-extrabold text-[#3D0B0E] mt-0.5">Verify</span>
       </div>
 
       {/* Rewards */}
-      <button
-        onClick={() => alert('Rewards store coming in Phase 2!')}
-        className="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] text-[#7A4547]"
+      <Link
+        href="/rewards"
+        className={`flex flex-col items-center justify-center min-w-[44px] min-h-[44px] ${
+          pathname === '/rewards' ? 'text-[#B92429]' : 'text-[#7A4547]'
+        }`}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <polyline points="20 12 20 22 4 22 4 12" />
@@ -60,7 +64,7 @@ export const BottomNav: React.FC = () => {
           <path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" />
         </svg>
         <span className="text-[10px] font-bold mt-0.5">Rewards</span>
-      </button>
+      </Link>
 
       {/* Profile */}
       <Link
