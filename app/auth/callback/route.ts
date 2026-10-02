@@ -19,33 +19,26 @@ export async function GET(req: NextRequest) {
       const user = session.user;
       const adminSupabase = createAdminClient();
 
+      // MINIMUM query: SELECT only display_name, phone_number, pincode to check completeness
       const { data: profile } = await adminSupabase
         .from('profiles')
-        .select('*')
+        .select('display_name, phone_number, pincode')
         .eq('id', user.id)
         .single();
 
       if (!profile) {
+        // Insert initial basic profile from Google metadata
         await adminSupabase.from('profiles').insert({
           id: user.id,
-          display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Zee Sipper',
+          display_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Zee Sipper',
           email: user.email || '',
           avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         });
 
-        await adminSupabase.from('events').insert([
-          { user_id: user.id, event_type: 'ACCOUNT_CREATED' },
-          { user_id: user.id, event_type: 'GOOGLE_AUTH_COMPLETED' },
-        ]);
-
         targetRedirect = `${baseUrl}/profile`;
       } else {
-        await adminSupabase.from('events').insert({
-          user_id: user.id,
-          event_type: 'LOGIN',
-        });
-
-        if (!profile.phone_number || !profile.team) {
+        const isComplete = Boolean(profile.display_name && profile.phone_number && profile.pincode);
+        if (!isComplete) {
           targetRedirect = `${baseUrl}/profile`;
         } else {
           targetRedirect = `${baseUrl}/home`;
@@ -54,21 +47,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Branded HTML loading page + 307 HTTP redirect
+  // Branded HTML loading page + Instant JS replace / 307 redirect
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Saving your coins... | Zee Sip Rewards</title>
+  <title>Setting up your account... | Zee Sip Rewards</title>
+  <link rel="icon" type="image/png" href="/zeesip-logo.png" />
   <meta http-equiv="refresh" content="0;url=${targetRedirect}">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap');
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 0;
       background-color: #B92429;
       color: #FFFFFF;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -77,36 +73,29 @@ export async function GET(req: NextRequest) {
       text-align: center;
     }
     .logo {
-      width: 90px;
-      height: 90px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      object-fit: cover;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
       margin-bottom: 20px;
+    }
+    .text {
+      font-size: 16px;
+      font-weight: 600;
+      color: #FFFFFF;
+      margin: 0 0 20px 0;
     }
     .spinner {
       width: 36px;
       height: 36px;
-      border: 4px solid rgba(255,255,255,0.3);
-      border-top-color: #FFC93C;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #FFFFFF;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
-    }
-    h2 {
-      font-size: 22px;
-      font-weight: 800;
-      margin: 0;
-      color: #FFC93C;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    p {
-      font-size: 13px;
-      opacity: 0.9;
-      margin-top: 6px;
     }
   </style>
   <script>
@@ -114,10 +103,9 @@ export async function GET(req: NextRequest) {
   </script>
 </head>
 <body>
-  <img src="/zeesip-logo.png" alt="Zee Sip" class="logo" />
+  <img src="/zeesip-logo.png" alt="Zee Sip Logo" class="logo" />
+  <p class="text">Setting up your account...</p>
   <div class="spinner"></div>
-  <h2>Saving your coins...</h2>
-  <p>Connecting your Zee Sip Rewards profile</p>
 </body>
 </html>`;
 

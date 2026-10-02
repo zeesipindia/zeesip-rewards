@@ -1,12 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { MangoIcon, PineappleIcon, WarningTriangleIcon, CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
+import { addOptimisticCoins } from '@/lib/balanceCache';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -25,10 +26,18 @@ export default function ProfilePage() {
   const [city, setCity] = useState<string>('');
   const [state, setState] = useState<string>('Kerala');
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Form & User States
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isReturningUser, setIsReturningUser] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Celebration Overlay State
+  const [showCelebration, setShowCelebration] = useState<boolean>(false);
+  const [celebrationTitle, setCelebrationTitle] = useState<string>("YOU'RE ALL SET!");
+  const [celebrationBonus, setCelebrationBonus] = useState<number>(0);
+  const [celebrationDurationMs, setCelebrationDurationMs] = useState<number>(2500);
+
+  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -38,12 +47,14 @@ export default function ProfilePage() {
         return;
       }
 
+      // Pre-fill immediately from Google session data (0ms latency, instant render)
+      const metaName = user.user_metadata?.full_name || user.user_metadata?.name || '';
       setUserEmail(user.email || '');
-      setDisplayName(user.user_metadata?.full_name || user.user_metadata?.name || '');
+      setDisplayName(metaName);
+      setDeliveryName(metaName);
       setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
-      setDeliveryName(user.user_metadata?.full_name || user.user_metadata?.name || '');
 
-      // Check if profile exists
+      // Fetch saved profile row in background to overlay existing database details
       supabase
         .from('profiles')
         .select('*')
@@ -51,6 +62,9 @@ export default function ProfilePage() {
         .single()
         .then(({ data: profile }) => {
           if (profile) {
+            if (profile.phone_number || profile.completed_tasks?.profile_completed) {
+              setIsReturningUser(true);
+            }
             if (profile.display_name) setDisplayName(profile.display_name);
             if (profile.pincode) setPincode(profile.pincode);
             if (profile.phone_number) setPhone(profile.phone_number);
@@ -61,24 +75,13 @@ export default function ProfilePage() {
             if (profile.address_line2) setAddressLine2(profile.address_line2);
             if (profile.city) setCity(profile.city);
             if (profile.state) setState(profile.state);
-
-            // Auto-check completed profile bonus
-            if (profile.display_name && profile.phone_number && profile.pincode && !profile.completed_tasks?.profile_completed) {
-              fetch('/api/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  display_name: profile.display_name,
-                  pincode: profile.pincode,
-                  phone_number: profile.phone_number,
-                  team: profile.team,
-                }),
-              }).catch(() => {});
-            }
           }
-          setIsLoading(false);
         });
     });
+
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,7 +89,6 @@ export default function ProfilePage() {
     if (isSubmitting) return;
 
     setErrorMsg(null);
-    setSuccessMsg(null);
 
     // Validation
     if (!displayName.trim()) {
@@ -105,6 +107,7 @@ export default function ProfilePage() {
       return;
     }
 
+    // Immediately disable button & show spinner inside
     setIsSubmitting(true);
 
     try {
@@ -128,19 +131,33 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMsg(data.error || 'Failed to update profile');
+        setErrorMsg('Something went wrong. Please try again.');
         setIsSubmitting(false);
         return;
       }
 
-      setSuccessMsg(
-        data.newlyAwardedCoins > 0
-          ? `Profile saved! You earned +${data.newlyAwardedCoins} bonus coins!`
-          : 'Profile saved successfully!'
-      );
-      setIsSubmitting(false);
+      // Calculate celebration variables
+      const bonusEarned = data.newlyAwardedCoins || 0;
+      if (bonusEarned > 0) {
+        addOptimisticCoins(bonusEarned);
+      }
+
+      const isInitialCompletion = !isReturningUser;
+      const title = isInitialCompletion ? "YOU'RE ALL SET!" : 'SAVED!';
+      // 2.5s for initial setup or when bonus coins earned; 1.5s for simple returning edit
+      const durationMs = isInitialCompletion || bonusEarned > 0 ? 2500 : 1500;
+
+      setCelebrationTitle(title);
+      setCelebrationBonus(bonusEarned);
+      setCelebrationDurationMs(durationMs);
+      setShowCelebration(true);
+
+      // Auto redirect to /home after duration
+      redirectTimerRef.current = setTimeout(() => {
+        router.push('/home');
+      }, durationMs);
     } catch {
-      setErrorMsg('Connection error. Please try again.');
+      setErrorMsg('Something went wrong. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -151,22 +168,8 @@ export default function ProfilePage() {
     router.push('/');
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] w-full bg-white flex flex-col justify-between p-6">
-        <Header variant="red" />
-        <div className="my-auto flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-[#B92429] border-t-transparent rounded-full animate-spin" />
-          <p className="font-anton text-lg text-[#B92429] uppercase tracking-wide">
-            Loading profile...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <main className="min-h-[100dvh] w-full bg-white text-[#3D0B0E] flex flex-col justify-between pb-24 select-none">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-white text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
       <div>
         <Header variant="red" />
 
@@ -197,18 +200,6 @@ export default function ProfilePage() {
 
         {/* Form Container */}
         <form onSubmit={handleSubmit} className="px-5 pt-5 flex flex-col gap-6">
-          {errorMsg && (
-            <div className="p-3 rounded-[14px] bg-[#B92429]/10 border border-[#B92429]/30 text-[#B92429] text-xs font-bold">
-              {errorMsg}
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="p-3 rounded-[14px] bg-[#8FC31F]/15 border border-[#8FC31F]/40 text-[#3D0B0E] text-xs font-extrabold">
-              {successMsg}
-            </div>
-          )}
-
           {/* SECTION 1: PERSONAL DETAILS */}
           <div className="flex flex-col gap-4">
             <h2 className="text-[18px] font-anton text-[#B92429] uppercase tracking-wide">
@@ -425,7 +416,14 @@ export default function ProfilePage() {
             </span>
           </label>
 
-          {/* Primary CTA Button: SAVE CHANGES */}
+          {/* Error Message Below Button */}
+          {errorMsg && (
+            <p className="text-xs font-bold text-[#B92429] bg-[#FFF5F3] p-3 rounded-[14px] border border-[#B92429]/30 text-center">
+              {errorMsg}
+            </p>
+          )}
+
+          {/* Primary CTA Button: START COLLECTING / SAVE CHANGES */}
           <button
             type="submit"
             disabled={isSubmitting}
@@ -434,10 +432,12 @@ export default function ProfilePage() {
             {isSubmitting ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>SAVING CHANGES...</span>
+                <span>SAVING...</span>
               </>
-            ) : (
+            ) : isReturningUser ? (
               'SAVE CHANGES'
+            ) : (
+              'START COLLECTING'
             )}
           </button>
 
@@ -451,6 +451,97 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+
+      {/* FULL SCREEN SUCCESS CELEBRATION OVERLAY */}
+      {showCelebration && (
+        <div className="fixed inset-0 z-50 bg-[#B92429]/97 backdrop-blur-md flex flex-col items-center justify-between p-6 select-none overflow-hidden animate-fadeIn">
+          {/* Background Floating Sparkle Stars */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {[
+              { left: '12%', delay: '0s', size: 24, color: '#FFC93C' },
+              { left: '28%', delay: '0.4s', size: 16, color: '#FFFFFF' },
+              { left: '48%', delay: '0.2s', size: 28, color: '#FFC93C' },
+              { left: '68%', delay: '0.6s', size: 20, color: '#FFFFFF' },
+              { left: '84%', delay: '0.1s', size: 22, color: '#FFC93C' },
+              { left: '38%', delay: '0.8s', size: 18, color: '#FFFFFF' },
+              { left: '58%', delay: '0.5s', size: 26, color: '#FFC93C' },
+              { left: '22%', delay: '0.7s', size: 14, color: '#FFFFFF' },
+            ].map((s, idx) => (
+              <div
+                key={idx}
+                className="absolute animate-floatUp opacity-80"
+                style={{
+                  left: s.left,
+                  bottom: '-40px',
+                  animationDelay: s.delay,
+                  animationDuration: '2.5s',
+                }}
+              >
+                <svg width={s.size} height={s.size} viewBox="0 0 24 24" fill={s.color}>
+                  <path d="M12 0C12 8 16 12 24 12C16 12 12 16 12 24C12 16 8 12 0 12C8 12 12 8 12 0Z" />
+                </svg>
+              </div>
+            ))}
+          </div>
+
+          <div className="h-4" />
+
+          {/* Center Content */}
+          <div className="flex flex-col items-center gap-4 z-10 text-center my-auto">
+            {/* 80px Gold Coin SVG with 400ms Scale-Up Animation */}
+            <div className="animate-scaleUp">
+              <svg width="80" height="80" viewBox="0 0 24 24" className="drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]">
+                <circle cx="12" cy="12" r="11" fill="#FFC93C" />
+                <circle cx="12" cy="12" r="7" fill="none" stroke="#B92429" strokeWidth="1.6" />
+                <path
+                  d="M12 6.5C12.35 10.2 13.8 11.65 17.5 12 13.8 12.35 12.35 13.8 12 17.5 11.65 13.8 10.2 12.35 6.5 12 10.2 11.65 11.65 10.2 12 6.5z"
+                  fill="#B92429"
+                />
+              </svg>
+            </div>
+
+            {/* Heading */}
+            <h2 className="font-anton text-[36px] text-white leading-none uppercase tracking-wide drop-shadow-md">
+              {celebrationTitle}
+            </h2>
+
+            {/* Bonus Coins Display */}
+            {celebrationBonus > 0 && (
+              <div className="bg-black/30 border border-[#FFC93C]/40 px-5 py-2 rounded-full animate-bounce">
+                <span className="font-anton text-[28px] text-[#FFC93C] leading-none tracking-wider">
+                  +{celebrationBonus} COINS EARNED
+                </span>
+              </div>
+            )}
+
+            {/* Small Redirecting Text */}
+            <p className="text-[14px] font-bold text-white/90 font-['Montserrat',sans-serif]">
+              Redirecting to home...
+            </p>
+          </div>
+
+          {/* Bottom Progress Bar & Manual Link */}
+          <div className="w-full max-w-xs flex flex-col items-center gap-3 z-10 pb-6">
+            <div className="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/20">
+              <div
+                className="h-full bg-[#FFC93C] rounded-full transition-all ease-linear"
+                style={{
+                  width: '100%',
+                  transitionDuration: `${celebrationDurationMs}ms`,
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push('/home')}
+              className="text-[14px] font-bold text-[#FFC93C] hover:text-white uppercase tracking-wider underline underline-offset-4 cursor-pointer"
+            >
+              GO TO HOME →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <BottomNav />

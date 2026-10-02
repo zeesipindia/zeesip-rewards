@@ -10,6 +10,8 @@ import { BottomNav } from '@/components/BottomNav';
 import { CheckIcon, FireIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
 
+import { getCachedBalance, fetchAndCacheBalance } from '@/lib/balanceCache';
+
 interface HistoryEntry {
   id: string;
   amount: number;
@@ -21,9 +23,12 @@ interface HistoryEntry {
 export default function HomePage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>('Sipper');
-  const [balance, setBalance] = useState<number | null>(null);
+  const [balance, setBalance] = useState<number | null>(() => getCachedBalance());
   const [target] = useState<number>(250);
-  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [progressPercent, setProgressPercent] = useState<number>(() => {
+    const cached = getCachedBalance();
+    return cached !== null ? Math.min(100, Math.round((cached / 250) * 100)) : 0;
+  });
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -39,15 +44,10 @@ export default function HomePage() {
   const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
   const fetchBalance = useCallback(() => {
-    fetch('/api/balance')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.balance !== undefined) {
-          setBalance(data.balance);
-          setProgressPercent(data.progress_percent || 0);
-        }
-      })
-      .catch(() => {});
+    fetchAndCacheBalance().then(({ balance: b, progress_percent: p }) => {
+      setBalance(b);
+      setProgressPercent(p);
+    });
   }, []);
 
   useEffect(() => {

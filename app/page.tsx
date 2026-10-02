@@ -80,28 +80,30 @@ export default function LandingPage() {
     setIsAuthLoading(true);
     setErrorMsg(null);
 
-    // Log GOOGLE_AUTH_STARTED event
-    fetch('/api/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_type: 'GOOGLE_AUTH_STARTED' }),
-    }).catch(() => {});
+    // Yield execution briefly to force React to paint disabled state and spinner
+    setTimeout(async () => {
+      fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: 'GOOGLE_AUTH_STARTED' }),
+      }).catch(() => {});
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
-    const redirectTo = `${siteUrl.replace(/\/+$/, '')}/auth/callback`;
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+      const redirectTo = `${siteUrl.replace(/\/+$/, '')}/auth/callback`;
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectTo,
-      },
-    });
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectTo,
+        },
+      });
 
-    if (error) {
-      setErrorMsg(error.message);
-      setIsAuthLoading(false);
-    }
+      if (error) {
+        setErrorMsg(error.message);
+        setIsAuthLoading(false);
+      }
+    }, 10);
   };
 
   return (
@@ -196,7 +198,7 @@ export default function LandingPage() {
               {isAuthLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 border-2 border-[#3D0B0E] border-t-transparent rounded-full animate-spin" />
-                  <span>SAVING COINS...</span>
+                  <span>CONNECTING...</span>
                 </div>
               ) : (
                 <span>SAVE MY {wonAmount} COINS</span>
@@ -220,9 +222,16 @@ export default function LandingPage() {
                 <button
                   onClick={handleGoogleAuth}
                   disabled={isAuthLoading}
-                  className="font-extrabold text-[12px] text-[#B92429] underline underline-offset-2 hover:text-[#7A1418] cursor-pointer disabled:opacity-50"
+                  className="font-extrabold text-[12px] text-[#B92429] underline underline-offset-2 hover:text-[#7A1418] cursor-pointer disabled:opacity-75 flex items-center gap-1.5"
                 >
-                  {isAuthLoading ? 'Connecting...' : 'Log in'}
+                  {isAuthLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-[#B92429] border-t-transparent rounded-full animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    'Log in'
+                  )}
                 </button>
               }
             />

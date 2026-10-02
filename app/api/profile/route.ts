@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
+  const isNewProfile = !existingProfile || !existingProfile.phone_number;
   const completedTasks = existingProfile?.completed_tasks || {};
   let newlyAwardedCoins = 0;
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Check 2: Delivery address bonus (+10 coins)
-  const isAddressComplete = Boolean(address_line1 && city && state && pincode);
+  const isAddressComplete = Boolean(address_line1 && city);
   if (isAddressComplete && !completedTasks.address_completed) {
     completedTasks.address_completed = true;
     newlyAwardedCoins += 10;
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     newlyAwardedCoins,
+    isNewProfile,
     completed_tasks: completedTasks,
   });
 }
