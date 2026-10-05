@@ -37,7 +37,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
         setRotation(finalAngle);
         const timer = setTimeout(() => {
           if (onSpinComplete) onSpinComplete();
-        }, 4500);
+        }, 4600); // 4.0s spin + 0.6s wait before showing result popup
         return () => clearTimeout(timer);
       }
     }
@@ -105,6 +105,11 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
               const textX = 100 + 60 * Math.cos(midAngleRad);
               const textY = 100 + 60 * Math.sin(midAngleRad);
 
+              let textRotation = (midAngleDeg + 90 + 360) % 360;
+              if (textRotation > 90 && textRotation < 270) {
+                textRotation = (textRotation + 180) % 360;
+              }
+
               return (
                 <g key={i}>
                   <path
@@ -121,7 +126,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
                     fontFamily="var(--font-anton), 'Anton', sans-serif"
                     textAnchor="middle"
                     dominantBaseline="central"
-                    transform={`rotate(${midAngleDeg + 90}, ${textX}, ${textY})`}
+                    transform={`rotate(${textRotation}, ${textX}, ${textY})`}
                     className="font-normal tracking-wide"
                   >
                     {seg.label}
