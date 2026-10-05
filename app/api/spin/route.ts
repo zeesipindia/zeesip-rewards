@@ -203,5 +203,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     segment_index: segmentIndex,
     value: winningValue,
+    guest_session_id: activeSessionId,
   });
 }

@@ -8,12 +8,14 @@ import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
 import { SpinWheel } from '@/components/SpinWheel';
 import { MiniWheelIcon, CameraIcon, TicketIcon, SlotsIcon, CheckIcon } from '@/components/Icons';
+import { ComingSoonModal } from '@/components/ComingSoonModal';
 import { createClient } from '@/lib/supabase/client';
 import { addOptimisticCoins } from '@/lib/balanceCache';
 
 export default function PlayPage() {
   const router = useRouter();
   const [balance, setBalance] = useState<number>(0);
+  const [isComingSoonOpen, setIsComingSoonOpen] = useState<boolean>(false);
   const [isSpunToday, setIsSpunToday] = useState<boolean>(false);
   const [dailySpinCoinsWon, setDailySpinCoinsWon] = useState<number>(0);
 
@@ -245,6 +247,7 @@ export default function PlayPage() {
     setShowResultOverlay(true);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => {
@@ -254,6 +257,9 @@ export default function PlayPage() {
 
   return (
     <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
+      {/* Coming Soon Modal */}
+      <ComingSoonModal isOpen={isComingSoonOpen} onClose={() => setIsComingSoonOpen(false)} />
+
       {/* Toast Notification Popup */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
@@ -431,7 +437,7 @@ export default function PlayPage() {
               {/* Scan a Bottle Card */}
               <button
                 type="button"
-                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                onClick={() => setIsComingSoonOpen(true)}
                 className="bg-gray-50 opacity-75 rounded-[20px] p-4 shadow-sm border border-gray-200 flex flex-col justify-between h-[130px] text-left hover:border-gray-400 cursor-pointer"
               >
                 <div className="flex items-center justify-between">
@@ -561,7 +567,7 @@ export default function PlayPage() {
               {/* 2. Scan a Zee Sip bottle */}
               <button
                 type="button"
-                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                onClick={() => setIsComingSoonOpen(true)}
                 className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
               >
                 <div className="flex items-center gap-3">

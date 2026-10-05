@@ -42,12 +42,15 @@ export async function POST(req: NextRequest) {
   if (isProfileComplete && !completedTasks.profile_completed) {
     completedTasks.profile_completed = true;
     newlyAwardedCoins += 10;
-    await adminSupabase.from('coin_ledger').insert({
+    const { error: insErr } = await adminSupabase.from('coin_ledger').insert({
       user_id: user.id,
       amount: 10,
-      source: 'PROFILE_BONUS',
+      source: 'TASK_BONUS',
       description: 'Profile completion bonus (+10 coins)',
     });
+    if (insErr) {
+      console.error('[profile/route] Error inserting profile bonus:', insErr);
+    }
   }
 
   // Check 2: Delivery address bonus (+10 coins)
@@ -55,12 +58,15 @@ export async function POST(req: NextRequest) {
   if (isAddressComplete && !completedTasks.address_completed) {
     completedTasks.address_completed = true;
     newlyAwardedCoins += 10;
-    await adminSupabase.from('coin_ledger').insert({
+    const { error: insErr } = await adminSupabase.from('coin_ledger').insert({
       user_id: user.id,
       amount: 10,
       source: 'TASK_BONUS',
       description: 'Delivery address bonus (+10 coins)',
     });
+    if (insErr) {
+      console.error('[profile/route] Error inserting address bonus:', insErr);
+    }
   }
 
   // Check 3: Team selection bonus (+5 coins)
@@ -68,12 +74,15 @@ export async function POST(req: NextRequest) {
   if (isTeamSelected && !completedTasks.team_selected) {
     completedTasks.team_selected = true;
     newlyAwardedCoins += 5;
-    await adminSupabase.from('coin_ledger').insert({
+    const { error: insErr } = await adminSupabase.from('coin_ledger').insert({
       user_id: user.id,
       amount: 5,
       source: 'TASK_BONUS',
       description: 'Team selection bonus (+5 coins)',
     });
+    if (insErr) {
+      console.error('[profile/route] Error inserting team bonus:', insErr);
+    }
   }
 
   // Upsert profile

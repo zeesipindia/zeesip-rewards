@@ -62,6 +62,14 @@ export default function LandingPage() {
 
       setWonAmount(data.value || 50);
       setTargetIndex(data.segment_index);
+
+      if (data.guest_session_id) {
+        try {
+          localStorage.setItem('guest_session_id', data.guest_session_id);
+        } catch {
+          // ignore localStorage block in private mode
+        }
+      }
     } catch {
       setErrorMsg('Connection error. Please try again.');
       setViewState('landing');

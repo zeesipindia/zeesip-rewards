@@ -14,8 +14,8 @@ export async function setGuestSessionCookie(sessionId: string): Promise<void> {
     name: GUEST_COOKIE_NAME,
     value: sessionId,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true,
+    sameSite: 'lax',
     maxAge: SEVEN_DAYS_SECONDS,
     path: '/',
   });

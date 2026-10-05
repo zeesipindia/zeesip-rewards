@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getGuestSessionIdFromCookies, clearGuestSessionCookie } from '@/lib/cookies';
 
 export async function GET(req: NextRequest) {
   const requestUrl = new URL(req.url);
@@ -18,6 +19,47 @@ export async function GET(req: NextRequest) {
     if (!error && session?.user) {
       const user = session.user;
       const adminSupabase = createAdminClient();
+
+      // Claim guest session if cookie exists
+      try {
+        const guestSessionId = await getGuestSessionIdFromCookies();
+        if (guestSessionId) {
+          const { data: guestSession } = await adminSupabase
+            .from('guest_sessions')
+            .select('*')
+            .eq('id', guestSessionId)
+            .single();
+
+          if (guestSession && !guestSession.claimed_by) {
+            const coinsWon = guestSession.coins_won || 50;
+            if (coinsWon > 0) {
+              await adminSupabase.from('coin_ledger').insert({
+                user_id: user.id,
+                amount: coinsWon,
+                source: 'GUEST_SPIN',
+                description: 'Guest spin reward (+50 coins)',
+              });
+
+              await adminSupabase
+                .from('guest_sessions')
+                .update({
+                  claimed_by: user.id,
+                  claimed_at: new Date().toISOString(),
+                })
+                .eq('id', guestSessionId);
+
+              await adminSupabase.from('events').insert({
+                user_id: user.id,
+                event_type: 'COINS_TRANSFERRED',
+                metadata: { guest_session_id: guestSessionId, amount: coinsWon },
+              });
+            }
+            await clearGuestSessionCookie();
+          }
+        }
+      } catch (claimErr) {
+        console.error('[auth/callback] Error claiming guest session:', claimErr);
+      }
 
       // MINIMUM query: SELECT only display_name, phone_number, pincode to check completeness
       const { data: profile } = await adminSupabase

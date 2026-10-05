@@ -54,6 +54,23 @@ export default function ProfilePage() {
       setDeliveryName(metaName);
       setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
 
+      // Check for pending guest session coins and claim them
+      const pendingGuestId = typeof window !== 'undefined' ? localStorage.getItem('guest_session_id') : null;
+      fetch('/api/claim-guest-coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guest_session_id: pendingGuestId }),
+      })
+        .then((res) => res.json())
+        .then(() => {
+          if (pendingGuestId) {
+            try {
+              localStorage.removeItem('guest_session_id');
+            } catch {}
+          }
+        })
+        .catch(() => {});
+
       // Fetch saved profile row in background to overlay existing database details
       supabase
         .from('profiles')

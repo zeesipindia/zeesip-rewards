@@ -8,6 +8,7 @@ import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
 import { CheckIcon, FireIcon } from '@/components/Icons';
+import { ComingSoonModal } from '@/components/ComingSoonModal';
 import { createClient } from '@/lib/supabase/client';
 
 import { getCachedBalance, fetchAndCacheBalance } from '@/lib/balanceCache';
@@ -32,6 +33,7 @@ export default function HomePage() {
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isComingSoonOpen, setIsComingSoonOpen] = useState<boolean>(false);
 
   // Task Completion States
   const [isProfileDone, setIsProfileDone] = useState<boolean>(false);
@@ -60,6 +62,26 @@ export default function HomePage() {
       }
 
       setUserName(user.user_metadata?.full_name?.split(' ')[0] || 'Sipper');
+
+      // Check for pending guest session coins and claim them
+      const pendingGuestId = typeof window !== 'undefined' ? localStorage.getItem('guest_session_id') : null;
+      fetch('/api/claim-guest-coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guest_session_id: pendingGuestId }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (pendingGuestId) {
+            try {
+              localStorage.removeItem('guest_session_id');
+            } catch {}
+          }
+          if (data.claimedCoins) {
+            fetchBalance();
+          }
+        })
+        .catch(() => {});
 
       // Prefetch routes for instant navigation
       router.prefetch('/profile');
@@ -141,6 +163,7 @@ export default function HomePage() {
   const currentBalance = balance ?? 50;
   const remainingCoins = Math.max(0, target - currentBalance);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => {
@@ -150,6 +173,9 @@ export default function HomePage() {
 
   return (
     <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
+      {/* Coming Soon Modal */}
+      <ComingSoonModal isOpen={isComingSoonOpen} onClose={() => setIsComingSoonOpen(false)} />
+
       {/* Toast Notification Popup */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
@@ -356,7 +382,7 @@ export default function HomePage() {
               {/* 2. Scan a Zee Sip bottle */}
               <button
                 type="button"
-                onClick={() => showToast('Coming soon! Bottle scanning will be available in a future update.')}
+                onClick={() => setIsComingSoonOpen(true)}
                 className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
               >
                 <div className="flex items-center gap-3">
