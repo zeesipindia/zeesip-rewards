@@ -16,6 +16,22 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(target, 307);
   }
 
+  // Admin section session protection
+  const pathname = req.nextUrl.pathname;
+  if (pathname.startsWith('/admin')) {
+    const isAdminAuthenticated = req.cookies.get('admin_session')?.value === 'true';
+
+    if (pathname === '/admin' || pathname === '/admin/') {
+      if (isAdminAuthenticated) {
+        return NextResponse.redirect(new URL('/admin/dashboard', req.url));
+      }
+    } else {
+      if (!isAdminAuthenticated) {
+        return NextResponse.redirect(new URL('/admin', req.url));
+      }
+    }
+  }
+
   return NextResponse.next();
 }
 
