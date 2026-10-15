@@ -31,13 +31,13 @@ export async function GET(req: NextRequest) {
             .single();
 
           if (guestSession && !guestSession.claimed_by) {
-            const coinsWon = guestSession.coins_won || 50;
+            const coinsWon = guestSession.coins_won || 30;
             if (coinsWon > 0) {
               await adminSupabase.from('coin_ledger').insert({
                 user_id: user.id,
                 amount: coinsWon,
                 source: 'GUEST_SPIN',
-                description: 'Guest spin reward (+50 coins)',
+                description: `Guest spin reward (+${coinsWon} coins)`,
               });
 
               await adminSupabase

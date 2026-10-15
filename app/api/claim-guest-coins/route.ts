@@ -13,22 +13,43 @@ export async function POST(req: NextRequest) {
     }
 
     let guestSessionId = await getGuestSessionIdFromCookies();
+    let phoneNumber: string | undefined;
 
-    // Fallback: check JSON body for guest_session_id from localStorage
-    if (!guestSessionId) {
-      try {
-        const body = await req.json();
+    try {
+      const body = await req.json();
+      if (!guestSessionId && body.guest_session_id) {
         guestSessionId = body.guest_session_id;
-      } catch {
-        // Body was empty or invalid JSON
+      }
+      if (body.phone_number) {
+        phoneNumber = body.phone_number;
+      }
+    } catch {
+      // Body was empty or invalid JSON
+    }
+
+    const adminSupabase = createAdminClient();
+
+    // If phone number was captured on guest first spin, update profile if missing
+    if (phoneNumber) {
+      const cleaned = phoneNumber.replace(/\D/g, '');
+      if (cleaned.length === 10) {
+        const { data: prof } = await adminSupabase
+          .from('profiles')
+          .select('phone_number')
+          .eq('id', user.id)
+          .single();
+        if (prof && !prof.phone_number) {
+          await adminSupabase
+            .from('profiles')
+            .update({ phone_number: cleaned })
+            .eq('id', user.id);
+        }
       }
     }
 
     if (!guestSessionId) {
       return NextResponse.json({ success: false, message: 'No guest session found' });
     }
-
-    const adminSupabase = createAdminClient();
 
     // Fetch guest session
     const { data: guestSession, error: sessionErr } = await adminSupabase
@@ -48,7 +69,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Guest session already claimed' });
     }
 
-    const coinsWon = guestSession.coins_won || 50;
+    const coinsWon = guestSession.coins_won || 30;
 
     if (coinsWon > 0) {
       // 1. Insert into coin_ledger using Service Role Key
@@ -56,7 +77,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         amount: coinsWon,
         source: 'GUEST_SPIN',
-        description: 'Guest spin reward (+50 coins)',
+        description: `Guest spin reward (+${coinsWon} coins)`,
       });
 
       if (ledgerError) {

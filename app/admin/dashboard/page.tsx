@@ -7,6 +7,7 @@ import Link from 'next/link';
 interface StatsData {
   total_users: number;
   total_coins: number;
+  total_games_today: number;
 }
 
 interface UserRow {
@@ -119,11 +120,11 @@ function AdminDashboardContent() {
         </header>
 
         {/* STATS BAR */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Card 1: Registered Users */}
           <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between">
             <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              TOTAL REGISTERED USERS
+              TOTAL USERS
             </span>
             <div className="mt-2">
               {isLoadingStats ? (
@@ -147,6 +148,22 @@ function AdminDashboardContent() {
               ) : (
                 <span className="font-anton text-[44px] text-[#FFC93C] drop-shadow-[0_1px_2px_rgba(61,11,14,0.3)] leading-none">
                   {stats?.total_coins ?? 0}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Games Played Today */}
+          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between">
+            <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
+              TOTAL GAMES PLAYED TODAY
+            </span>
+            <div className="mt-2 flex items-center gap-2">
+              {isLoadingStats ? (
+                <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+              ) : (
+                <span className="font-anton text-[44px] text-[#8FC31F] leading-none">
+                  {stats?.total_games_today ?? 0}
                 </span>
               )}
             </div>

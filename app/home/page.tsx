@@ -7,10 +7,8 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
-import { CheckIcon, FireIcon } from '@/components/Icons';
-import { ComingSoonModal } from '@/components/ComingSoonModal';
+import { CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
-
 import { getCachedBalance, fetchAndCacheBalance } from '@/lib/balanceCache';
 
 interface HistoryEntry {
@@ -25,31 +23,47 @@ export default function HomePage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>('Sipper');
   const [balance, setBalance] = useState<number | null>(() => getCachedBalance());
-  const [target] = useState<number>(250);
+  const [target] = useState<number>(500);
   const [progressPercent, setProgressPercent] = useState<number>(() => {
     const cached = getCachedBalance();
-    return cached !== null ? Math.min(100, Math.round((cached / 250) * 100)) : 0;
+    return cached !== null ? Math.min(100, Math.round((cached / 500) * 100)) : 0;
   });
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [isComingSoonOpen, setIsComingSoonOpen] = useState<boolean>(false);
-
-  // Task Completion States
-  const [isProfileDone, setIsProfileDone] = useState<boolean>(false);
-  const [isAddressDone, setIsAddressDone] = useState<boolean>(false);
-  const [isTeamDone, setIsTeamDone] = useState<boolean>(false);
-  const [isSpinDoneToday, setIsSpinDoneToday] = useState<boolean>(false);
-  const [isThreeSipsDoneToday, setIsThreeSipsDoneToday] = useState<boolean>(false);
-  const [isKulkkiDoneToday, setIsKulkkiDoneToday] = useState<boolean>(false);
-  const [isScratchDoneToday, setIsScratchDoneToday] = useState<boolean>(false);
   const [coinsEarnedToday, setCoinsEarnedToday] = useState<number>(0);
 
-  const fetchBalance = useCallback(() => {
-    fetchAndCacheBalance().then(({ balance: b, progress_percent: p }) => {
-      setBalance(b);
-      setProgressPercent(p);
-    });
+  // Two New Games Statuses
+  const [isMatchDoneToday, setIsMatchDoneToday] = useState<boolean>(false);
+  const [matchCoinsWon, setMatchCoinsWon] = useState<number>(0);
+
+  const [isSliceDoneToday, setIsSliceDoneToday] = useState<boolean>(false);
+  const [sliceCoinsWon, setSliceCoinsWon] = useState<number>(0);
+
+  // Expiry states
+  const [daysSinceLastPlay, setDaysSinceLastPlay] = useState<number>(0);
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState<number>(14);
+  const [showExpiredModal, setShowExpiredModal] = useState<boolean>(false);
+
+  const fetchBalanceAndExpiry = useCallback(() => {
+    fetchAndCacheBalance();
+    fetch('/api/balance')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.balance !== undefined) {
+          setBalance(data.balance);
+          setProgressPercent(data.progress_percent || 0);
+        }
+        if (data.days_since_last_play !== undefined) {
+          setDaysSinceLastPlay(data.days_since_last_play);
+        }
+        if (data.days_until_expiry !== undefined) {
+          setDaysUntilExpiry(data.days_until_expiry);
+        }
+        if (data.expired_just_now) {
+          setShowExpiredModal(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -65,10 +79,15 @@ export default function HomePage() {
 
       // Check for pending guest session coins and claim them
       const pendingGuestId = typeof window !== 'undefined' ? localStorage.getItem('guest_session_id') : null;
+      const pendingPhone = typeof window !== 'undefined' ? localStorage.getItem('guest_phone_number') : null;
+
       fetch('/api/claim-guest-coins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guest_session_id: pendingGuestId }),
+        body: JSON.stringify({
+          guest_session_id: pendingGuestId,
+          phone_number: pendingPhone || undefined,
+        }),
       })
         .then((res) => res.json())
         .then((data) => {
@@ -77,8 +96,13 @@ export default function HomePage() {
               localStorage.removeItem('guest_session_id');
             } catch {}
           }
+          if (pendingPhone) {
+            try {
+              localStorage.removeItem('guest_phone_number');
+            } catch {}
+          }
           if (data.claimedCoins) {
-            fetchBalance();
+            fetchBalanceAndExpiry();
           }
         })
         .catch(() => {});
@@ -86,34 +110,34 @@ export default function HomePage() {
       // Prefetch routes for instant navigation
       router.prefetch('/profile');
       router.prefetch('/play');
-      router.prefetch('/play/three-sips');
-      router.prefetch('/play/pick-kulkki');
-      router.prefetch('/play/scratch');
+      router.prefetch('/play/sip-match');
+      router.prefetch('/play/sip-slice');
       router.prefetch('/rewards');
 
-      // Fetch profile & check tasks
+      // Fetch profile display name
       supabase
         .from('profiles')
-        .select('*')
+        .select('display_name')
         .eq('id', user.id)
         .single()
         .then(({ data: profile }) => {
-          if (profile) {
-            if (profile.display_name) {
-              setUserName(profile.display_name.split(' ')[0]);
-            }
-            setIsProfileDone(Boolean(profile.display_name && profile.phone_number && profile.pincode));
-            setIsAddressDone(Boolean(profile.address_line1 && profile.city && profile.state && profile.pincode));
-            setIsTeamDone(Boolean(profile.team));
+          if (profile?.display_name) {
+            setUserName(profile.display_name.split(' ')[0]);
           }
         });
 
-      // Fetch balance from API
-      fetchBalance();
+      fetchBalanceAndExpiry();
 
-      // Fetch today's activities & check tasks
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Calculate midnight IST
+      const now = new Date();
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(now.getTime() + istOffsetMs);
+      const istMidnightUTC = new Date(
+        Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 0, 0, 0)
+      );
+      const midnightIST = new Date(istMidnightUTC.getTime() - istOffsetMs);
 
+      // Fetch ledger history & coins earned today
       supabase
         .from('coin_ledger')
         .select('*')
@@ -122,67 +146,57 @@ export default function HomePage() {
         .then(({ data: ledger }) => {
           if (ledger) {
             setHistoryEntries(ledger as HistoryEntry[]);
-
-            // Calculate coins earned today
             const todayEntries = ledger.filter(
-              (item) => item.created_at.startsWith(todayStr) && item.amount > 0
+              (item) => new Date(item.created_at) >= midnightIST && item.amount > 0
             );
             const todaySum = todayEntries.reduce((sum, item) => sum + item.amount, 0);
             setCoinsEarnedToday(todaySum);
-
-            // Check if daily spin done today
-            const spunToday = ledger.some(
-              (item) => item.source === 'DAILY_SPIN' && item.created_at.startsWith(todayStr)
-            );
-            setIsSpinDoneToday(spunToday);
           }
         });
 
-      // Check daily game plays today
+      // Fetch today's plays for Sip Match and Sip Slice
       supabase
         .from('game_plays')
-        .select('game_type, played_at')
+        .select('*')
         .eq('user_id', user.id)
-        .gte('played_at', `${todayStr}T00:00:00.000Z`)
+        .gte('played_at', midnightIST.toISOString())
+        .order('played_at', { ascending: false })
         .then(({ data: plays }) => {
           if (plays) {
-            setIsThreeSipsDoneToday(plays.some((p) => p.game_type === 'three_sips'));
-            setIsKulkkiDoneToday(plays.some((p) => p.game_type === 'pick_kulkki'));
-            setIsScratchDoneToday(plays.some((p) => p.game_type === 'scratch'));
+            const matchPlay = plays.find((p) => p.game_type === 'sip_match');
+            if (matchPlay) {
+              setIsMatchDoneToday(true);
+              setMatchCoinsWon(matchPlay.coins_won);
+            }
+
+            const slicePlay = plays.find((p) => p.game_type === 'sip_slice');
+            if (slicePlay) {
+              setIsSliceDoneToday(true);
+              setSliceCoinsWon(slicePlay.coins_won);
+            }
           }
         });
     });
 
-    // Re-fetch balance on window focus (Fix 9)
-    window.addEventListener('focus', fetchBalance);
+    window.addEventListener('focus', fetchBalanceAndExpiry);
     return () => {
-      window.removeEventListener('focus', fetchBalance);
+      window.removeEventListener('focus', fetchBalanceAndExpiry);
     };
-  }, [router, fetchBalance]);
+  }, [router, fetchBalanceAndExpiry]);
 
-  const currentBalance = balance ?? 50;
+  const currentBalance = balance ?? 30;
   const remainingCoins = Math.max(0, target - currentBalance);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => {
-      setToastMsg(null);
-    }, 3500);
-  };
+  // Activity summary last played label
+  const lastPlayedText =
+    daysSinceLastPlay === 0
+      ? 'today'
+      : daysSinceLastPlay === 1
+      ? 'yesterday'
+      : `${daysSinceLastPlay} days ago`;
 
   return (
     <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#FFF5F3] text-[#3D0B0E] flex flex-col justify-between pb-24 select-none relative overflow-x-hidden shadow-2xl">
-      {/* Coming Soon Modal */}
-      <ComingSoonModal isOpen={isComingSoonOpen} onClose={() => setIsComingSoonOpen(false)} />
-
-      {/* Toast Notification Popup */}
-      {toastMsg && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">
-          {toastMsg}
-        </div>
-      )}
-
       <div>
         {/* Top Yellow Band */}
         <div className="w-full bg-[#FFC93C] text-[#3D0B0E] pb-5 border-b-4 border-[#3D0B0E]">
@@ -197,8 +211,8 @@ export default function HomePage() {
         </div>
 
         {/* Main Content */}
-        <div className="px-5 -mt-6 flex flex-col gap-5 relative z-10">
-          {/* RED "YOUR SIP COINS" CARD WITH WATERMARK */}
+        <div className="px-5 -mt-6 flex flex-col gap-4 relative z-10">
+          {/* RED "YOUR SIP COINS" CARD */}
           <div className="w-full bg-[#B92429] text-white rounded-[24px] p-5 shadow-xl relative overflow-hidden">
             {/* Logo Watermark */}
             <img
@@ -235,7 +249,7 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Progress Bar */}
+            {/* Progress Bar (against 500) */}
             <div className="w-full z-10 relative">
               <div className="w-full h-3 bg-black/25 rounded-full overflow-hidden border border-white/20">
                 <div
@@ -251,264 +265,147 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* THINGS TO DO SECTION */}
-          <div className="flex flex-col gap-3">
+          {/* COIN EXPIRY WARNING BANNERS BELOW COIN CARD */}
+          {daysSinceLastPlay >= 11 && daysSinceLastPlay <= 13 && (
+            <div className="w-full bg-[#B92429] text-white rounded-[16px] p-3.5 flex items-center gap-2.5 shadow-md border border-[#7A1418]">
+              {/* Yellow Warning Triangle SVG */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
+                <path d="M12 2L1 21H23L12 2Z" fill="#FFC93C" />
+                <path d="M12 9V14" stroke="#B92429" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="12" cy="17" r="1.25" fill="#B92429" />
+              </svg>
+              <span className="font-['Montserrat',sans-serif] font-extrabold text-[14px] leading-tight">
+                Your coins expire in {daysUntilExpiry} days! Play now to save them
+              </span>
+            </div>
+          )}
+
+          {daysSinceLastPlay >= 8 && daysSinceLastPlay <= 10 && (
+            <div className="w-full bg-[#FFE14D] text-[#3D0B0E] rounded-[16px] p-3 flex items-center gap-2.5 border border-[#FFC93C]">
+              <span className="font-['Montserrat',sans-serif] font-semibold text-[13px] leading-tight">
+                Play a game this week to keep your coins active
+              </span>
+            </div>
+          )}
+
+          {/* THINGS TO DO SECTION - ONLY THE TWO NEW GAMES */}
+          <div className="flex flex-col gap-3 mt-1">
             <h2 className="text-[26px] font-anton text-[#B92429] uppercase tracking-wide">
               THINGS TO DO
             </h2>
 
             <div className="flex flex-col gap-2.5">
-              {/* 1. Daily Games */}
+              {/* 1. Sip Match */}
               <Link
-                href="/play"
+                href="/play/sip-match"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isSpinDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                  isMatchDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isSpinDoneToday
+                      isMatchDoneToday
                         ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
                         : 'border-[#3D0B0E]/30 bg-transparent'
                     }`}
                   >
-                    {isSpinDoneToday && <CheckIcon size={14} />}
+                    {isMatchDoneToday && <CheckIcon size={14} />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Spin the wheel
+                    <span className="text-[14px] font-extrabold text-[#3D0B0E]">
+                      Sip Match
                     </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isSpinDoneToday ? 'Done today' : 'Daily spin available'}
+                    <span className="text-[11px] font-bold text-[#7A4547]">
+                      {isMatchDoneToday ? `Done today (+${matchCoinsWon} coins)` : 'Play memory game'}
                     </span>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  up to +50
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px] border border-[#FFC93C]/60">
+                  {isMatchDoneToday ? 'DONE' : 'up to +12'}
                 </span>
               </Link>
 
+              {/* 2. Sip Slice */}
               <Link
-                href="/play/three-sips"
+                href="/play/sip-slice"
                 className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isThreeSipsDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
+                  isSliceDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isThreeSipsDoneToday
+                      isSliceDoneToday
                         ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
                         : 'border-[#3D0B0E]/30 bg-transparent'
                     }`}
                   >
-                    {isThreeSipsDoneToday && <CheckIcon size={14} />}
+                    {isSliceDoneToday && <CheckIcon size={14} />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Play Three Sips
+                    <span className="text-[14px] font-extrabold text-[#3D0B0E]">
+                      Sip Slice
                     </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isThreeSipsDoneToday ? 'Done today' : 'Slot machine game'}
+                    <span className="text-[11px] font-bold text-[#7A4547]">
+                      {isSliceDoneToday ? `Done today (+${sliceCoinsWon} coins)` : 'Slice bottles in the air'}
                     </span>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  up to +50
-                </span>
-              </Link>
-
-              <Link
-                href="/play/pick-kulkki"
-                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isKulkkiDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isKulkkiDoneToday
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isKulkkiDoneToday && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Pick the Kulkki
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isKulkkiDoneToday ? 'Done today' : 'Bottle shuffle game'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  up to +25
-                </span>
-              </Link>
-
-              <Link
-                href="/play/scratch"
-                className={`w-full bg-white rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isScratchDoneToday ? 'border-l-[#8FC31F]' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isScratchDoneToday
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isScratchDoneToday && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Scratch Your Sip
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isScratchDoneToday ? 'Done today' : 'Digital scratch card'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  up to +50
-                </span>
-              </Link>
-
-              {/* 2. Scan a Zee Sip bottle */}
-              <button
-                type="button"
-                onClick={() => setIsComingSoonOpen(true)}
-                className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full border-2 border-gray-400 bg-transparent" />
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-gray-700">
-                      Scan a Zee Sip bottle
-                    </span>
-                    <span className="text-[10px] font-bold text-gray-500">
-                      Scan QR code on bottle
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 font-anton text-[10px] uppercase">
-                  COMING SOON
-                </span>
-              </button>
-
-              {/* 3. Completed One-Time Tasks */}
-              <Link
-                href="/profile"
-                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isProfileDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isProfileDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isProfileDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Complete your profile
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isProfileDone ? 'Completed' : 'Add name, phone & pincode'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +10 coins
-                </span>
-              </Link>
-
-              <Link
-                href="/profile"
-                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isAddressDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isAddressDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isAddressDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Add delivery address
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isAddressDone ? 'Completed' : 'Required to receive rewards'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +10 coins
-                </span>
-              </Link>
-
-              <Link
-                href="/profile"
-                className={`w-full bg-white/70 rounded-[18px] p-3.5 shadow-sm border-l-4 flex items-center justify-between transition-transform active:scale-[0.99] ${
-                  isTeamDone ? 'border-l-[#8FC31F] opacity-60' : 'border-l-[#B92429]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
-                      isTeamDone
-                        ? 'bg-[#8FC31F] border-[#8FC31F] text-white'
-                        : 'border-[#3D0B0E]/30 bg-transparent'
-                    }`}
-                  >
-                    {isTeamDone && <CheckIcon size={14} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-extrabold text-[#3D0B0E]">
-                      Pick your team
-                    </span>
-                    <span className="text-[10px] font-bold text-[#7A4547]">
-                      {isTeamDone ? 'Completed' : 'Team Mango or Team Pineapple'}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px]">
-                  +5 coins
+                <span className="px-2.5 py-1 rounded-full bg-[#FFC93C]/30 text-[#3D0B0E] font-anton text-[12px] border border-[#FFC93C]/60">
+                  {isSliceDoneToday ? 'DONE' : 'up to +10'}
                 </span>
               </Link>
             </div>
           </div>
 
-          {/* BOTTOM ACTIVITY MINI SUMMARY */}
-          <div className="w-full bg-white/80 rounded-[16px] p-3.5 border border-[#F4D2CF] flex items-center justify-between">
+          {/* ACTIVITY SUMMARY AT THE BOTTOM */}
+          <div className="w-full bg-white/80 rounded-[16px] p-3.5 border border-[#F4D2CF] flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2">
               <CoinIcon size={20} />
               <span className="text-[12px] font-extrabold text-[#3D0B0E]">
                 {coinsEarnedToday} coins earned today
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#7A4547]">
-              <FireIcon size={16} />
-              <span>1 day streak</span>
+            <div className="text-[11.5px] font-extrabold text-[#7A4547]">
+              Last played: {lastPlayedText}
             </div>
           </div>
         </div>
       </div>
+
+      {/* COIN EXPIRY TRIGGERED MODAL */}
+      {showExpiredModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-5 select-none animate-fadeIn">
+          <div className="w-full max-w-[340px] bg-white rounded-[28px] p-7 shadow-2xl flex flex-col items-center text-center border-4 border-[#B92429]">
+            <div className="w-16 h-16 rounded-full bg-[#FFF5F3] border-2 border-[#B92429] flex items-center justify-center mb-3">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L1 21H23L12 2Z" fill="#B92429" />
+                <path d="M12 9V14" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="12" cy="17" r="1.25" fill="white" />
+              </svg>
+            </div>
+
+            <h2 className="font-anton text-[26px] text-[#B92429] leading-tight uppercase mb-2">
+              COINS EXPIRED
+            </h2>
+            <p className="text-[13px] font-bold text-[#7A4547] mb-5 leading-normal">
+              Your Sip Coins expired because you haven&apos;t played in over 2 weeks. Start collecting again!
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowExpiredModal(false);
+                router.push('/play');
+              }}
+              className="w-full h-[52px] bg-[#B92429] text-[#FFC93C] font-anton text-[20px] uppercase rounded-[16px] shadow-lg cursor-pointer"
+            >
+              START PLAYING
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* HISTORY MODAL */}
       {showHistoryModal && (

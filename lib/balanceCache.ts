@@ -24,7 +24,7 @@ export function setCachedBalance(balance: number, progress?: number) {
 export function addOptimisticCoins(amount: number): number {
   const current = getCachedBalance() ?? 0;
   const newBalance = current + amount;
-  const progress = Math.min(100, Math.round((newBalance / 250) * 100));
+  const progress = Math.min(100, Math.round((newBalance / 500) * 100));
   setCachedBalance(newBalance, progress);
   return newBalance;
 }

@@ -118,7 +118,13 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const { profile, balance, coin_ledger, game_plays } = data;
-  const progressPercent = Math.min(100, Math.round((balance / 250) * 100));
+  const target = 500;
+  const progressPercent = Math.min(100, Math.round((balance / target) * 100));
+
+  // Only show new games: sip_match and sip_slice
+  const newGamePlays = (game_plays || []).filter(
+    (g) => g.game_type === 'sip_match' || g.game_type === 'sip_slice'
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 text-[#3D0B0E] font-['Montserrat',sans-serif] p-4 sm:p-8">
@@ -142,161 +148,105 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 alt={profile.display_name}
                 width={64}
                 height={64}
-                className="w-16 h-16 rounded-full border-2 border-[#B92429] object-cover shadow-sm"
+                className="w-16 h-16 rounded-full border-2 border-gray-200 object-cover"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-[#B92429] text-white font-anton text-[28px] flex items-center justify-center border-2 border-[#3D0B0E]">
+              <div className="w-16 h-16 rounded-full bg-[#B92429] text-[#FFC93C] font-anton text-[26px] flex items-center justify-center border-2 border-[#3D0B0E]">
                 {profile.display_name?.slice(0, 1).toUpperCase() || 'Z'}
               </div>
             )}
             <div className="flex flex-col">
-              <h1 className="font-anton text-[28px] text-[#B92429] uppercase leading-tight">
+              <h1 className="font-anton text-[28px] text-[#B92429] leading-tight uppercase">
                 {profile.display_name}
               </h1>
-              <span className="text-[13px] font-bold text-gray-600">{profile.email}</span>
+              <span className="text-[13px] font-bold text-gray-500">
+                {profile.email} · Joined {formatDate(profile.created_at)}
+              </span>
             </div>
           </div>
 
-          <div className="bg-[#FFF5F3] border border-[#F4D2CF] rounded-[16px] px-5 py-3 flex flex-col items-end">
-            <span className="text-[10px] font-extrabold text-[#7A4547] uppercase tracking-wider">
-              CURRENT BALANCE
-            </span>
-            <span className="font-anton text-[32px] text-[#FFC93C] drop-shadow-[0_1px_1px_rgba(61,11,14,0.4)] leading-none mt-0.5">
-              {balance} COINS
-            </span>
-          </div>
+          {/* Team Badge */}
+          {profile.team && (
+            <div
+              className={`px-4 py-2 rounded-[14px] font-anton text-[14px] uppercase border ${
+                profile.team === 'mango'
+                  ? 'bg-[#CDEE1C]/40 border-[#CDEE1C] text-[#3D0B0E]'
+                  : 'bg-[#FFE14D]/40 border-[#FFE14D] text-[#3D0B0E]'
+              }`}
+            >
+              TEAM {profile.team}
+            </div>
+          )}
         </div>
 
-        {/* GRID: PROFILE & DELIVERY ADDRESS & COIN BALANCE */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* SECTION 1: PROFILE DETAILS */}
+        {/* SECTION 2 & 3 GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* PROFILE DETAILS */}
           <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col gap-4">
             <h2 className="font-anton text-[18px] text-[#B92429] uppercase tracking-wide border-b border-gray-100 pb-2">
               PROFILE DETAILS
             </h2>
-
-            <div className="flex flex-col gap-2.5 text-[13px] font-bold">
+            <div className="grid grid-cols-2 gap-4 text-[13px]">
               <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Display Name</span>
-                <span className="text-[#3D0B0E]">{profile.display_name}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Email</span>
-                <span className="text-[#3D0B0E]">{profile.email}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Phone Number</span>
-                {profile.phone_number ? (
-                  <span className="text-[#3D0B0E]">{profile.phone_number}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not set</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Pincode</span>
-                {profile.pincode ? (
-                  <span className="text-[#3D0B0E]">{profile.pincode}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not set</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Team</span>
-                {profile.team === 'mango' ? (
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#CDEE1C] text-[#3D0B0E] font-anton text-[11px] uppercase">
-                    Team Mango
-                  </span>
-                ) : profile.team === 'pineapple' ? (
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#FFE14D] text-[#3D0B0E] font-anton text-[11px] uppercase">
-                    Team Pineapple
-                  </span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not set</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">WhatsApp Consent</span>
-                <span className={profile.whatsapp_consent ? 'text-green-600' : 'text-gray-500'}>
-                  {profile.whatsapp_consent ? 'Yes' : 'No'}
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase block">
+                  PHONE NUMBER
+                </span>
+                <span className="font-bold text-[#3D0B0E]">
+                  {profile.phone_number ? `+91 ${profile.phone_number}` : 'Not provided'}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Account Created</span>
-                <span className="text-gray-700 text-[12px]">{formatDate(profile.created_at)}</span>
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase block">
+                  PINCODE
+                </span>
+                <span className="font-bold text-[#3D0B0E]">
+                  {profile.pincode || 'Not provided'}
+                </span>
               </div>
+              <div>
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase block">
+                  WHATSAPP CONSENT
+                </span>
+                <span className="font-bold text-[#3D0B0E]">
+                  {profile.whatsapp_consent ? 'Yes (Opted in)' : 'No'}
+                </span>
+              </div>
+            </div>
+
+            {/* Delivery Address */}
+            <div className="border-t border-gray-100 pt-3 flex flex-col gap-1">
+              <span className="text-[11px] font-extrabold text-[#7A4547] uppercase">
+                DELIVERY ADDRESS
+              </span>
+              {profile.address_line1 ? (
+                <div className="text-[13px] font-bold text-[#3D0B0E]">
+                  <p>{profile.delivery_name || profile.display_name}</p>
+                  <p>{profile.address_line1}</p>
+                  {profile.address_line2 && <p>{profile.address_line2}</p>}
+                  <p>
+                    {profile.city}, {profile.state} - {profile.pincode}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[13px] font-bold text-gray-400">
+                  No delivery address added yet.
+                </p>
+              )}
             </div>
           </div>
 
-          {/* SECTION 2: DELIVERY ADDRESS */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col gap-4">
-            <h2 className="font-anton text-[18px] text-[#B92429] uppercase tracking-wide border-b border-gray-100 pb-2">
-              DELIVERY ADDRESS
-            </h2>
-
-            <div className="flex flex-col gap-2.5 text-[13px] font-bold">
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Delivery Name</span>
-                {profile.delivery_name ? (
-                  <span className="text-[#3D0B0E]">{profile.delivery_name}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Address Line 1</span>
-                {profile.address_line1 ? (
-                  <span className="text-[#3D0B0E]">{profile.address_line1}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Address Line 2</span>
-                {profile.address_line2 ? (
-                  <span className="text-[#3D0B0E]">{profile.address_line2}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">City</span>
-                {profile.city ? (
-                  <span className="text-[#3D0B0E]">{profile.city}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">State</span>
-                {profile.state ? (
-                  <span className="text-[#3D0B0E]">{profile.state}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400 text-[11px] uppercase block">Pincode</span>
-                {profile.pincode ? (
-                  <span className="text-[#3D0B0E]">{profile.pincode}</span>
-                ) : (
-                  <span className="text-gray-400 font-normal">Not provided</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 3: COIN BALANCE & REWARD PROGRESS */}
+          {/* COIN BALANCE & REWARD TARGET (500) */}
           <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between gap-4">
-            <div className="flex flex-col gap-2">
+            <div>
               <h2 className="font-anton text-[18px] text-[#B92429] uppercase tracking-wide border-b border-gray-100 pb-2">
-                COIN BALANCE
+                COIN REWARD STATUS
               </h2>
-              <div className="mt-2">
-                <span className="font-anton text-[56px] text-[#FFC93C] drop-shadow-[0_2px_4px_rgba(61,11,14,0.3)] leading-none block">
-                  {balance}
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-[12px] font-extrabold text-[#7A4547] uppercase">
+                  CURRENT BALANCE
                 </span>
-                <span className="text-[12px] font-extrabold text-[#7A4547] uppercase tracking-wider block mt-1">
-                  TOTAL SIP COINS
+                <span className="font-anton text-[40px] text-[#B92429] leading-none">
+                  {balance} COINS
                 </span>
               </div>
             </div>
@@ -304,7 +254,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
             <div className="w-full bg-[#FFF5F3] p-4 rounded-[16px] border border-[#F4D2CF] flex flex-col gap-2">
               <div className="flex justify-between items-center text-[12px] font-extrabold text-[#7A4547]">
                 <span>PROGRESS TO FREE ZEE SIP</span>
-                <span>{balance} / 250</span>
+                <span>{balance} / {target}</span>
               </div>
               <div className="w-full h-3.5 bg-[#FCE4E1] rounded-full overflow-hidden border border-[#F4D2CF]">
                 <div
@@ -313,9 +263,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 />
               </div>
               <span className="text-[11px] font-bold text-[#7A4547]">
-                {balance >= 250
-                  ? 'Reward target reached (250 coins)!'
-                  : `${250 - balance} more coins needed to unlock reward.`}
+                {balance >= target
+                  ? `Reward target reached (${target} coins)!`
+                  : `${target - balance} more coins needed to unlock reward.`}
               </span>
             </div>
           </div>
@@ -370,17 +320,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
 
-        {/* SECTION 5: GAME ACTIVITY */}
+        {/* SECTION 5: GAME ACTIVITY (Only sip_match and sip_slice) */}
         <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col gap-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <h2 className="font-anton text-[18px] text-[#B92429] uppercase tracking-wide">
-              GAME ACTIVITY ({game_plays.length})
+              GAME ACTIVITY ({newGamePlays.length})
             </h2>
           </div>
 
-          {game_plays.length === 0 ? (
+          {newGamePlays.length === 0 ? (
             <p className="text-xs text-gray-500 font-bold py-4 text-center">
-              No game plays recorded for this user yet.
+              No new game plays recorded for this user yet.
             </p>
           ) : (
             <div className="overflow-x-auto border border-gray-200 rounded-[16px]">
@@ -394,7 +344,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-[13px] font-bold">
-                  {game_plays.map((game, idx) => (
+                  {newGamePlays.map((game, idx) => (
                     <tr
                       key={game.id}
                       className={idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9] hover:bg-gray-100/60'}
@@ -402,7 +352,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                       <td className="p-3 text-gray-600 font-normal">{formatDate(game.played_at)}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded bg-gray-100 border border-gray-200 text-[11px] font-anton text-[#B92429] uppercase">
-                          {game.game_type.replace(/_/g, ' ')}
+                          {game.game_type === 'sip_match' ? 'SIP MATCH' : 'SIP SLICE'}
                         </span>
                       </td>
                       <td className="p-3 text-gray-700 font-mono text-[11px]">

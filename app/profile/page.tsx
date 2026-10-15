@@ -7,7 +7,6 @@ import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { MangoIcon, PineappleIcon, WarningTriangleIcon, CheckIcon } from '@/components/Icons';
 import { createClient } from '@/lib/supabase/client';
-import { addOptimisticCoins } from '@/lib/balanceCache';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -34,8 +33,7 @@ export default function ProfilePage() {
   // Celebration Overlay State
   const [showCelebration, setShowCelebration] = useState<boolean>(false);
   const [celebrationTitle, setCelebrationTitle] = useState<string>("YOU'RE ALL SET!");
-  const [celebrationBonus, setCelebrationBonus] = useState<number>(0);
-  const [celebrationDurationMs, setCelebrationDurationMs] = useState<number>(2500);
+  const [celebrationDurationMs, setCelebrationDurationMs] = useState<number>(1500);
 
   const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -47,19 +45,31 @@ export default function ProfilePage() {
         return;
       }
 
-      // Pre-fill immediately from Google session data (0ms latency, instant render)
+      // Pre-fill immediately from Google session data
       const metaName = user.user_metadata?.full_name || user.user_metadata?.name || '';
       setUserEmail(user.email || '');
       setDisplayName(metaName);
       setDeliveryName(metaName);
       setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
 
+      // Check for guest phone number saved in localStorage (Task 5)
+      let localPhone = '';
+      if (typeof window !== 'undefined') {
+        localPhone = localStorage.getItem('guest_phone_number') || '';
+        if (localPhone) {
+          setPhone(localPhone);
+        }
+      }
+
       // Check for pending guest session coins and claim them
       const pendingGuestId = typeof window !== 'undefined' ? localStorage.getItem('guest_session_id') : null;
       fetch('/api/claim-guest-coins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guest_session_id: pendingGuestId }),
+        body: JSON.stringify({
+          guest_session_id: pendingGuestId,
+          phone_number: localPhone || undefined,
+        }),
       })
         .then((res) => res.json())
         .then(() => {
@@ -68,10 +78,15 @@ export default function ProfilePage() {
               localStorage.removeItem('guest_session_id');
             } catch {}
           }
+          if (localPhone) {
+            try {
+              localStorage.removeItem('guest_phone_number');
+            } catch {}
+          }
         })
         .catch(() => {});
 
-      // Fetch saved profile row in background to overlay existing database details
+      // Fetch saved profile row in background
       supabase
         .from('profiles')
         .select('*')
@@ -84,7 +99,11 @@ export default function ProfilePage() {
             }
             if (profile.display_name) setDisplayName(profile.display_name);
             if (profile.pincode) setPincode(profile.pincode);
-            if (profile.phone_number) setPhone(profile.phone_number);
+            if (profile.phone_number) {
+              setPhone(profile.phone_number);
+            } else if (localPhone) {
+              setPhone(localPhone);
+            }
             if (profile.team) setTeam(profile.team as 'mango' | 'pineapple');
             if (profile.whatsapp_consent !== undefined) setWhatsappConsent(profile.whatsapp_consent);
             if (profile.delivery_name) setDeliveryName(profile.delivery_name);
@@ -103,49 +122,41 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-
+    setIsSubmitting(true);
     setErrorMsg(null);
 
-    // Validation
-    if (!displayName.trim()) {
-      setErrorMsg('Please enter your name');
+    // Validate phone number: exactly 10 digits
+    const cleanedPhone = phone.replace(/\D/g, '');
+    if (phone && cleanedPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit WhatsApp number');
+      setIsSubmitting(false);
       return;
     }
 
-    if (pincode && !/^\d{6}$/.test(pincode.trim())) {
-      setErrorMsg('Pincode must be exactly 6 digits');
+    // Validate pincode if entered: exactly 6 digits
+    if (pincode && pincode.length !== 6) {
+      setErrorMsg('Please enter a valid 6-digit PIN code');
+      setIsSubmitting(false);
       return;
     }
-
-    const cleanPhone = phone ? phone.replace(/\D/g, '').slice(-10) : '';
-    if (phone && !/^\d{10}$/.test(cleanPhone)) {
-      setErrorMsg('Please enter a valid 10-digit WhatsApp phone number');
-      return;
-    }
-
-    // Immediately disable button & show spinner inside
-    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          display_name: displayName.trim(),
-          pincode: pincode.trim(),
-          phone_number: cleanPhone,
-          team,
+          display_name: displayName,
+          pincode: pincode || null,
+          phone_number: cleanedPhone || null,
+          team: team || null,
           whatsapp_consent: whatsappConsent,
-          delivery_name: deliveryName.trim() || displayName.trim(),
-          address_line1: addressLine1.trim(),
-          address_line2: addressLine2.trim(),
-          city: city.trim(),
-          state: state.trim() || 'Kerala',
+          delivery_name: deliveryName || displayName || null,
+          address_line1: addressLine1 || null,
+          address_line2: addressLine2 || null,
+          city: city || null,
+          state: state || 'Kerala',
         }),
       });
-
-      const data = await res.json();
 
       if (!res.ok) {
         setErrorMsg('Something went wrong. Please try again.');
@@ -153,19 +164,11 @@ export default function ProfilePage() {
         return;
       }
 
-      // Calculate celebration variables
-      const bonusEarned = data.newlyAwardedCoins || 0;
-      if (bonusEarned > 0) {
-        addOptimisticCoins(bonusEarned);
-      }
-
       const isInitialCompletion = !isReturningUser;
-      const title = isInitialCompletion ? "YOU'RE ALL SET!" : 'SAVED!';
-      // 2.5s for initial setup or when bonus coins earned; 1.5s for simple returning edit
-      const durationMs = isInitialCompletion || bonusEarned > 0 ? 2500 : 1500;
+      const title = isInitialCompletion ? "YOU'RE ALL SET!" : 'PROFILE SAVED!';
+      const durationMs = 1500;
 
       setCelebrationTitle(title);
-      setCelebrationBonus(bonusEarned);
       setCelebrationDurationMs(durationMs);
       setShowCelebration(true);
 
@@ -238,13 +241,13 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* WhatsApp Number */}
+            {/* WhatsApp Phone Number */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
                 WHATSAPP NUMBER
               </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3.5 font-extrabold text-[14px] text-[#7A4547]">
+              <div className="flex items-center w-full h-[48px] rounded-[16px] border-2 border-[#F4D2CF] focus-within:border-[#B92429] bg-[#FFF5F3] overflow-hidden">
+                <span className="px-3.5 font-bold text-[14px] text-[#7A4547] bg-[#FCE4E1] h-full flex items-center border-r border-[#F4D2CF]">
                   +91
                 </span>
                 <input
@@ -252,21 +255,21 @@ export default function ProfilePage() {
                   maxLength={10}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                  placeholder="9876543210"
-                  className="w-full h-[48px] pl-13 pr-3.5 rounded-[16px] border-2 border-[#F4D2CF] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                  placeholder="98765 43210"
+                  className="w-full h-full px-3.5 outline-none font-bold text-[14px] text-[#3D0B0E] bg-transparent"
                 />
+              </div>
+
+              {/* Real WhatsApp Number Warning */}
+              <div className="mt-1 bg-[#FFF5F3] border border-[#F4D2CF] rounded-[12px] p-2.5 flex items-start gap-2">
+                <WarningTriangleIcon size={18} className="text-[#B92429] flex-shrink-0 mt-0.5" />
+                <p className="text-[10.5px] font-bold text-[#7A4547] leading-tight">
+                  Enter your real WhatsApp number. We will contact you here to deliver your free Zee Sip. Wrong numbers cannot claim rewards.
+                </p>
               </div>
             </div>
 
-            {/* RED WARNING BOX */}
-            <div className="bg-[#B92429] text-white rounded-[14px] p-3 flex items-start gap-2.5 shadow-md">
-              <WarningTriangleIcon size={26} className="mt-0.5 shrink-0" />
-              <p className="text-[11.5px] font-bold leading-tight">
-                Use your real number. We&apos;ll contact you on WhatsApp to deliver your rewards. Wrong numbers can&apos;t claim rewards.
-              </p>
-            </div>
-
-            {/* Pincode */}
+            {/* PIN Code */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
                 PINCODE
@@ -289,7 +292,7 @@ export default function ProfilePage() {
                 DELIVERY ADDRESS
               </h2>
               <span className="text-[11px] font-bold text-[#7A4547]">
-                Required to receive your Zee Sip rewards (+10 coins bonus)
+                Required to receive your Zee Sip rewards
               </span>
             </div>
 
@@ -371,7 +374,7 @@ export default function ProfilePage() {
           <div className="flex flex-col gap-2 pt-2 border-t border-[#F4D2CF]">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-                YOUR TEAM (+5 coins bonus)
+                YOUR TEAM
               </label>
             </div>
 
@@ -413,123 +416,73 @@ export default function ProfilePage() {
                     TEAM PINEAPPLE
                   </span>
                   <span className="text-[10px] font-extrabold text-[#3D0B0E]/80">
-                    Sweet & Punchy
+                    Sweet & Fiery
                   </span>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Checkbox: WhatsApp Consent */}
-          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          {/* SECTION 4: WHATSAPP NOTIFICATION CONSENT */}
+          <div className="flex items-start gap-3 pt-2">
             <input
               type="checkbox"
+              id="whatsappConsent"
               checked={whatsappConsent}
               onChange={(e) => setWhatsappConsent(e.target.checked)}
-              className="w-4 h-4 mt-0.5 rounded border-[#F4D2CF] text-[#B92429] focus:ring-[#B92429]"
+              className="w-5 h-5 rounded-md accent-[#B92429] mt-0.5 cursor-pointer"
             />
-            <span className="text-[11.5px] font-bold text-[#7A4547] leading-snug">
+            <label
+              htmlFor="whatsappConsent"
+              className="text-[12px] font-bold text-[#7A4547] leading-snug cursor-pointer"
+            >
               Zee Sip can message me on WhatsApp about my coins and rewards.
-            </span>
-          </label>
+            </label>
+          </div>
 
-          {/* Error Message Below Button */}
+          {/* Error Message */}
           {errorMsg && (
-            <p className="text-xs font-bold text-[#B92429] bg-[#FFF5F3] p-3 rounded-[14px] border border-[#B92429]/30 text-center">
+            <p className="text-xs font-bold text-[#B92429] bg-[#FFF5F3] p-3 rounded-xl text-center border border-[#F4D2CF]">
               {errorMsg}
             </p>
           )}
 
-          {/* Primary CTA Button: START COLLECTING / SAVE CHANGES */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full h-[60px] bg-[#B92429] hover:bg-[#7A1418] active:scale-[0.98] text-white font-anton text-[22px] uppercase rounded-[18px] shadow-md transition-all cursor-pointer disabled:opacity-75 flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>SAVING...</span>
-              </>
-            ) : isReturningUser ? (
-              'SAVE CHANGES'
-            ) : (
-              'START COLLECTING'
-            )}
-          </button>
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3 mt-2">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-[54px] bg-[#B92429] hover:bg-[#A31D22] text-[#FFC93C] font-anton text-[20px] uppercase rounded-[18px] shadow-lg transition-all cursor-pointer flex items-center justify-center disabled:opacity-75"
+            >
+              {isSubmitting ? 'SAVING...' : 'SAVE PROFILE'}
+            </button>
 
-          {/* Secondary CTA Button: LOG OUT */}
-          <button
-            type="button"
-            onClick={handleLogOut}
-            className="w-full py-3 bg-[#FFF5F3] hover:bg-[#FCE4E1] text-[#7A4547] font-bold text-[14px] uppercase rounded-[14px] border border-[#F4D2CF] transition-colors cursor-pointer mt-1"
-          >
-            LOG OUT
-          </button>
+            <button
+              type="button"
+              onClick={handleLogOut}
+              className="w-full h-[44px] bg-[#FFF5F3] hover:bg-[#FCE4E1] text-[#7A4547] font-bold text-[13px] uppercase rounded-[16px] border border-[#F4D2CF] transition-all cursor-pointer"
+            >
+              LOG OUT
+            </button>
+          </div>
         </form>
       </div>
 
-      {/* FULL SCREEN SUCCESS CELEBRATION OVERLAY */}
+      {/* FULL-SCREEN CELEBRATION OVERLAY */}
       {showCelebration && (
-        <div className="fixed inset-0 z-50 bg-[#B92429]/97 backdrop-blur-md flex flex-col items-center justify-between p-6 select-none overflow-hidden animate-fadeIn">
-          {/* Background Floating Sparkle Stars */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {[
-              { left: '12%', delay: '0s', size: 24, color: '#FFC93C' },
-              { left: '28%', delay: '0.4s', size: 16, color: '#FFFFFF' },
-              { left: '48%', delay: '0.2s', size: 28, color: '#FFC93C' },
-              { left: '68%', delay: '0.6s', size: 20, color: '#FFFFFF' },
-              { left: '84%', delay: '0.1s', size: 22, color: '#FFC93C' },
-              { left: '38%', delay: '0.8s', size: 18, color: '#FFFFFF' },
-              { left: '58%', delay: '0.5s', size: 26, color: '#FFC93C' },
-              { left: '22%', delay: '0.7s', size: 14, color: '#FFFFFF' },
-            ].map((s, idx) => (
-              <div
-                key={idx}
-                className="absolute animate-floatUp opacity-80"
-                style={{
-                  left: s.left,
-                  bottom: '-40px',
-                  animationDelay: s.delay,
-                  animationDuration: '2.5s',
-                }}
-              >
-                <svg width={s.size} height={s.size} viewBox="0 0 24 24" fill={s.color}>
-                  <path d="M12 0C12 8 16 12 24 12C16 12 12 16 12 24C12 16 8 12 0 12C8 12 12 8 12 0Z" />
-                </svg>
-              </div>
-            ))}
-          </div>
-
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex flex-col items-center justify-between p-6 select-none animate-fadeIn">
           <div className="h-4" />
 
           {/* Center Content */}
           <div className="flex flex-col items-center gap-4 z-10 text-center my-auto">
-            {/* 80px Gold Coin SVG with 400ms Scale-Up Animation */}
-            <div className="animate-scaleUp">
-              <svg width="80" height="80" viewBox="0 0 24 24" className="drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]">
-                <circle cx="12" cy="12" r="11" fill="#FFC93C" />
-                <circle cx="12" cy="12" r="7" fill="none" stroke="#B92429" strokeWidth="1.6" />
-                <path
-                  d="M12 6.5C12.35 10.2 13.8 11.65 17.5 12 13.8 12.35 12.35 13.8 12 17.5 11.65 13.8 10.2 12.35 6.5 12 10.2 11.65 11.65 10.2 12 6.5z"
-                  fill="#B92429"
-                />
-              </svg>
+            <div className="w-20 h-20 rounded-full bg-[#8FC31F] flex items-center justify-center border-4 border-white shadow-2xl animate-scaleUp">
+              <CheckIcon size={44} className="text-white" />
             </div>
 
             {/* Heading */}
             <h2 className="font-anton text-[36px] text-white leading-none uppercase tracking-wide drop-shadow-md">
               {celebrationTitle}
             </h2>
-
-            {/* Bonus Coins Display */}
-            {celebrationBonus > 0 && (
-              <div className="bg-black/30 border border-[#FFC93C]/40 px-5 py-2 rounded-full animate-bounce">
-                <span className="font-anton text-[28px] text-[#FFC93C] leading-none tracking-wider">
-                  +{celebrationBonus} COINS EARNED
-                </span>
-              </div>
-            )}
 
             {/* Small Redirecting Text */}
             <p className="text-[14px] font-bold text-white/90 font-['Montserrat',sans-serif]">
