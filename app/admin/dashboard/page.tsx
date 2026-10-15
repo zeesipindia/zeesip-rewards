@@ -42,7 +42,6 @@ function AdminDashboardContent() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // Fetch stats and tab data
   useEffect(() => {
     // 1. Fetch Stats
     fetch('/api/admin/stats')
@@ -59,7 +58,7 @@ function AdminDashboardContent() {
       })
       .catch(() => setIsLoadingStats(false));
 
-    // 2. Fetch Users list
+    // 2. Fetch Users
     fetch('/api/admin/users')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
@@ -82,13 +81,13 @@ function AdminDashboardContent() {
     router.push('/admin');
   };
 
-  // Filter users by search query
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     const nameMatch = u.display_name?.toLowerCase().includes(q);
     const phoneMatch = u.phone_number?.toLowerCase().includes(q);
-    return nameMatch || phoneMatch;
+    const emailMatch = u.email?.toLowerCase().includes(q);
+    return nameMatch || phoneMatch || emailMatch;
   });
 
   const formatDate = (dateStr: string) => {
@@ -104,243 +103,296 @@ function AdminDashboardContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-[#3D0B0E] font-['Montserrat',sans-serif] p-4 sm:p-8">
-      <div className="max-w-[1200px] mx-auto flex flex-col gap-6">
-        {/* HEADER BAR */}
-        <header className="w-full bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex items-center justify-between">
-          <h1 className="font-anton text-[32px] text-[#B92429] uppercase tracking-wide leading-none">
-            ZEESIP ADMIN
-          </h1>
+    <div className="min-h-screen w-full bg-[#F5F5F5] text-[#3D0B0E] font-['Montserrat',sans-serif]">
+      {/* MOBILE BLOCK (< 768px) */}
+      <div className="flex md:hidden min-h-screen w-full items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-[12px] p-8 shadow-sm border border-[#E0E0E0] max-w-sm flex flex-col items-center">
+          <div className="w-12 h-12 rounded-full bg-[#FFF5F3] text-[#B92429] flex items-center justify-center mb-3">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <h2 className="font-anton text-[22px] text-[#B92429] uppercase mb-2">
+            DESKTOP ONLY
+          </h2>
+          <p className="text-[14px] font-bold text-[#7A4547] leading-relaxed">
+            Admin panel is designed for desktop. Please open on a laptop or computer.
+          </p>
+        </div>
+      </div>
+
+      {/* DESKTOP CONTENT (>= 768px) */}
+      <div className="hidden md:flex flex-col min-h-screen w-full">
+        {/* HEADER: Full width sticky top bar */}
+        <header className="sticky top-0 z-40 w-full bg-white border-b border-[#E0E0E0] px-8 py-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="font-anton text-[26px] text-[#B92429] uppercase tracking-wide leading-none">
+              ZEESIP ADMIN
+            </span>
+          </div>
+
           <button
             onClick={handleLogout}
-            className="text-[14px] font-bold text-[#B92429] hover:underline cursor-pointer uppercase"
+            className="text-[13px] font-extrabold text-[#B92429] hover:text-[#7A1418] hover:underline cursor-pointer uppercase tracking-wider"
           >
-            Logout
+            LOGOUT
           </button>
         </header>
 
-        {/* STATS BAR */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Card 1: Registered Users */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between">
-            <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              TOTAL USERS
-            </span>
-            <div className="mt-2">
-              {isLoadingStats ? (
-                <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
-              ) : (
-                <span className="font-anton text-[44px] text-[#3D0B0E] leading-none">
-                  {stats?.total_users ?? 0}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Card 2: Total Coins in Circulation */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between">
-            <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              TOTAL COINS IN CIRCULATION
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              {isLoadingStats ? (
-                <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
-              ) : (
-                <span className="font-anton text-[44px] text-[#FFC93C] drop-shadow-[0_1px_2px_rgba(61,11,14,0.3)] leading-none">
-                  {stats?.total_coins ?? 0}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Card 3: Games Played Today */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-gray-200 flex flex-col justify-between">
-            <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase">
-              TOTAL GAMES PLAYED TODAY
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              {isLoadingStats ? (
-                <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
-              ) : (
-                <span className="font-anton text-[44px] text-[#8FC31F] leading-none">
-                  {stats?.total_games_today ?? 0}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* TAB CONTROLS & MAIN CARD */}
-        <div className="bg-white rounded-[20px] shadow-sm border border-gray-200 overflow-hidden">
-          {/* Tabs Bar */}
-          <div className="flex border-b border-gray-200 bg-gray-50/50">
-            <Link
-              href="/admin/dashboard?tab=users"
-              className={`px-8 py-4 font-anton text-[18px] uppercase tracking-wide transition-colors ${
-                activeTab === 'users'
-                  ? 'bg-white text-[#B92429] border-b-4 border-[#B92429]'
-                  : 'text-gray-500 hover:text-[#3D0B0E]'
-              }`}
-            >
-              USERS ({users.length})
-            </Link>
-            <Link
-              href="/admin/dashboard?tab=points"
-              className={`px-8 py-4 font-anton text-[18px] uppercase tracking-wide transition-colors ${
-                activeTab === 'points'
-                  ? 'bg-white text-[#B92429] border-b-4 border-[#B92429]'
-                  : 'text-gray-500 hover:text-[#3D0B0E]'
-              }`}
-            >
-              POINTS LEADERBOARD
-            </Link>
-          </div>
-
-          {/* TAB 1: USERS */}
-          {activeTab === 'users' && (
-            <div className="p-6 flex flex-col gap-5">
-              {/* Search Box */}
-              <div className="w-full max-w-md">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name or phone number..."
-                  className="w-full h-[44px] px-4 rounded-[14px] border-2 border-gray-200 focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
-                />
+        {/* MAIN DESKTOP CONTAINER: Max-width 1200px centered */}
+        <main className="w-full max-w-[1200px] mx-auto px-8 py-8 flex flex-col gap-8 flex-1">
+          {/* STATS BAR: 3 cards horizontal */}
+          <div className="grid grid-cols-3 gap-6">
+            {/* Card 1: Total Users */}
+            <div className="bg-white rounded-[12px] p-6 shadow-sm border border-[#E0E0E0] flex flex-col justify-between">
+              <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase font-['Montserrat',sans-serif]">
+                TOTAL USERS
+              </span>
+              <div className="mt-3">
+                {isLoadingStats ? (
+                  <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  <span className="font-anton text-[46px] text-[#3D0B0E] leading-none">
+                    {stats?.total_users ?? 0}
+                  </span>
+                )}
               </div>
-
-              {/* Users Table */}
-              {isLoadingData ? (
-                <div className="py-12 text-center text-gray-500 font-bold">Loading users...</div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="py-12 text-center text-gray-500 font-bold">No users found.</div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded-[16px]">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100 border-b border-gray-200 text-[12px] font-extrabold text-[#7A4547] uppercase">
-                        <th className="p-4">DISPLAY NAME</th>
-                        <th className="p-4">PHONE NUMBER</th>
-                        <th className="p-4">TEAM</th>
-                        <th className="p-4">COINS</th>
-                        <th className="p-4">JOINED DATE</th>
-                        <th className="p-4 text-right">ACTION</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 text-[14px] font-bold">
-                      {filteredUsers.map((u, idx) => (
-                        <tr
-                          key={u.id}
-                          className={idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9] hover:bg-gray-100/60'}
-                        >
-                          <td className="p-4 text-[#3D0B0E]">{u.display_name}</td>
-                          <td className="p-4">
-                            {u.phone_number ? (
-                              <span className="text-[#3D0B0E]">{u.phone_number}</span>
-                            ) : (
-                              <span className="text-gray-400 font-normal">Not set</span>
-                            )}
-                          </td>
-                          <td className="p-4">
-                            {u.team === 'mango' ? (
-                              <span className="px-2.5 py-1 rounded-full bg-[#CDEE1C] text-[#3D0B0E] font-anton text-[12px] uppercase">
-                                Team Mango
-                              </span>
-                            ) : u.team === 'pineapple' ? (
-                              <span className="px-2.5 py-1 rounded-full bg-[#FFE14D] text-[#3D0B0E] font-anton text-[12px] uppercase">
-                                Team Pineapple
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 font-normal">Not set</span>
-                            )}
-                          </td>
-                          <td className="p-4 font-anton text-[16px] text-[#B92429]">
-                            {u.total_coins}
-                          </td>
-                          <td className="p-4 text-gray-600 text-[13px]">{formatDate(u.created_at)}</td>
-                          <td className="p-4 text-right">
-                            <Link
-                              href={`/admin/users/${u.id}`}
-                              className="px-4 py-2 rounded-[12px] bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[14px] uppercase transition-colors inline-block"
-                            >
-                              VIEW
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
-          )}
 
-          {/* TAB 2: POINTS LEADERBOARD */}
-          {activeTab === 'points' && (
-            <div className="p-6">
-              {leaderboard.length === 0 ? (
-                <div className="py-12 text-center text-gray-500 font-bold">No users on leaderboard yet.</div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded-[16px]">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100 border-b border-gray-200 text-[12px] font-extrabold text-[#7A4547] uppercase">
-                        <th className="p-4 w-20 text-center">RANK</th>
-                        <th className="p-4">DISPLAY NAME</th>
-                        <th className="p-4">PHONE NUMBER</th>
-                        <th className="p-4">TOTAL COINS</th>
-                        <th className="p-4 text-right">ACTION</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 text-[14px] font-bold">
-                      {leaderboard.map((user, idx) => {
-                        let rankStyle = 'bg-gray-100 text-gray-700';
-                        if (user.rank === 1) rankStyle = 'bg-[#FFC93C] text-[#3D0B0E] shadow-sm';
-                        else if (user.rank === 2) rankStyle = 'bg-[#C0C0C0] text-[#3D0B0E] shadow-sm';
-                        else if (user.rank === 3) rankStyle = 'bg-[#CD7F32] text-white shadow-sm';
+            {/* Card 2: Total Coins in Circulation (NET) */}
+            <div className="bg-white rounded-[12px] p-6 shadow-sm border border-[#E0E0E0] flex flex-col justify-between">
+              <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase font-['Montserrat',sans-serif]">
+                TOTAL COINS IN CIRCULATION (NET)
+              </span>
+              <div className="mt-3 flex items-center gap-2">
+                {isLoadingStats ? (
+                  <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  <span className="font-anton text-[46px] text-[#FFC93C] drop-shadow-[0_1px_2px_rgba(61,11,14,0.3)] leading-none">
+                    {stats?.total_coins ?? 0}
+                  </span>
+                )}
+              </div>
+            </div>
 
-                        return (
+            {/* Card 3: Games Played Today */}
+            <div className="bg-white rounded-[12px] p-6 shadow-sm border border-[#E0E0E0] flex flex-col justify-between">
+              <span className="text-[12px] font-extrabold text-[#7A4547] tracking-wider uppercase font-['Montserrat',sans-serif]">
+                GAMES PLAYED TODAY
+              </span>
+              <div className="mt-3 flex items-center gap-2">
+                {isLoadingStats ? (
+                  <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  <span className="font-anton text-[46px] text-[#8FC31F] leading-none">
+                    {stats?.total_games_today ?? 0}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* TAB CONTROLS & MAIN CONTENT CARD */}
+          <div className="w-full bg-white rounded-[12px] shadow-sm border border-[#E0E0E0] overflow-hidden">
+            {/* Tabs Header */}
+            <div className="flex border-b border-[#E0E0E0] bg-[#FAFAFA]">
+              <Link
+                href="/admin/dashboard?tab=users"
+                className={`px-8 py-4 font-anton text-[18px] uppercase tracking-wide transition-colors ${
+                  activeTab === 'users'
+                    ? 'bg-white text-[#B92429] border-b-2 border-[#B92429]'
+                    : 'text-gray-500 hover:text-[#3D0B0E]'
+                }`}
+              >
+                USERS ({users.length})
+              </Link>
+              <Link
+                href="/admin/dashboard?tab=points"
+                className={`px-8 py-4 font-anton text-[18px] uppercase tracking-wide transition-colors ${
+                  activeTab === 'points'
+                    ? 'bg-white text-[#B92429] border-b-2 border-[#B92429]'
+                    : 'text-gray-500 hover:text-[#3D0B0E]'
+                }`}
+              >
+                POINTS LEADERBOARD
+              </Link>
+            </div>
+
+            {/* TAB 1: USERS */}
+            {activeTab === 'users' && (
+              <div className="p-6 flex flex-col gap-6">
+                {/* Search Bar */}
+                <div className="w-full max-w-md">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by name, phone, or email..."
+                    className="w-full h-[44px] px-4 rounded-[8px] border border-[#E0E0E0] focus:border-[#B92429] outline-none font-bold text-[14px] text-[#3D0B0E] bg-[#FFF5F3]"
+                  />
+                </div>
+
+                {/* Users Table */}
+                {isLoadingData ? (
+                  <div className="py-16 text-center text-gray-500 font-bold">Loading users...</div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="py-16 text-center text-gray-500 font-bold">No users found.</div>
+                ) : (
+                  <div className="w-full overflow-x-auto border border-[#E0E0E0] rounded-[8px]">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#F5F5F5] border-b border-[#E0E0E0] text-[11px] font-extrabold text-[#7A4547] uppercase tracking-wider">
+                          <th className="p-3.5 text-center w-12">#</th>
+                          <th className="p-3.5">NAME</th>
+                          <th className="p-3.5">EMAIL</th>
+                          <th className="p-3.5">PHONE</th>
+                          <th className="p-3.5">TEAM</th>
+                          <th className="p-3.5">PINCODE</th>
+                          <th className="p-3.5 text-right">COINS</th>
+                          <th className="p-3.5">JOINED</th>
+                          <th className="p-3.5 text-center w-24">ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E0E0E0] text-[13px] font-bold">
+                        {filteredUsers.map((user, idx) => (
                           <tr
                             key={user.id}
-                            className={idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9] hover:bg-gray-100/60'}
+                            className={`${
+                              idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
+                            } hover:bg-amber-50/50 transition-colors`}
                           >
-                            <td className="p-4 text-center">
-                              <span
-                                className={`w-9 h-9 rounded-full font-anton text-[16px] inline-flex items-center justify-center ${rankStyle}`}
-                              >
-                                {user.rank}
-                              </span>
+                            <td className="p-3.5 text-center text-gray-400 font-normal">
+                              {idx + 1}
                             </td>
-                            <td className="p-4 text-[#3D0B0E]">{user.display_name}</td>
-                            <td className="p-4">
-                              {user.phone_number ? (
-                                <span className="text-[#3D0B0E]">{user.phone_number}</span>
+                            <td className="p-3.5 text-[#3D0B0E]">
+                              {user.display_name}
+                            </td>
+                            <td className="p-3.5 text-gray-600 font-normal">
+                              {user.email}
+                            </td>
+                            <td className="p-3.5 text-[#3D0B0E]">
+                              {user.phone_number ? `+91 ${user.phone_number}` : '-'}
+                            </td>
+                            <td className="p-3.5">
+                              {user.team ? (
+                                <span
+                                  className={`px-2.5 py-0.5 rounded text-[11px] font-anton uppercase ${
+                                    user.team === 'mango'
+                                      ? 'bg-[#CDEE1C]/40 text-[#3D0B0E] border border-[#CDEE1C]'
+                                      : 'bg-[#FFE14D]/40 text-[#3D0B0E] border border-[#FFE14D]'
+                                  }`}
+                                >
+                                  {user.team}
+                                </span>
                               ) : (
-                                <span className="text-gray-400 font-normal">Not set</span>
+                                <span className="text-gray-400 font-normal">-</span>
                               )}
                             </td>
-                            <td className="p-4 font-anton text-[20px] text-[#FFC93C] drop-shadow-[0_1px_1px_rgba(61,11,14,0.4)]">
-                              {user.total_coins} COINS
+                            <td className="p-3.5 text-gray-700 font-normal">
+                              {user.pincode || '-'}
                             </td>
-                            <td className="p-4 text-right">
+                            <td className="p-3.5 text-right font-anton text-[16px] text-[#B92429]">
+                              {user.total_coins}
+                            </td>
+                            <td className="p-3.5 text-gray-600 font-normal">
+                              {formatDate(user.created_at)}
+                            </td>
+                            <td className="p-3.5 text-center">
                               <Link
                                 href={`/admin/users/${user.id}`}
-                                className="px-4 py-2 rounded-[12px] bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[14px] uppercase transition-colors inline-block"
+                                className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
                               >
                                 VIEW
                               </Link>
                             </td>
                           </tr>
-                        );
-                      })}
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: POINTS LEADERBOARD */}
+            {activeTab === 'points' && (
+              <div className="p-6 flex flex-col gap-6">
+                <div className="w-full overflow-x-auto border border-[#E0E0E0] rounded-[8px]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#F5F5F5] border-b border-[#E0E0E0] text-[11px] font-extrabold text-[#7A4547] uppercase tracking-wider">
+                        <th className="p-3.5 text-center w-20">RANK</th>
+                        <th className="p-3.5">NAME</th>
+                        <th className="p-3.5">PHONE</th>
+                        <th className="p-3.5 text-right">TOTAL COINS (NET)</th>
+                        <th className="p-3.5 text-center w-28">ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E0E0E0] text-[13px] font-bold">
+                      {leaderboard.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-gray-500 font-bold">
+                            No leaderboard entries found.
+                          </td>
+                        </tr>
+                      ) : (
+                        leaderboard.map((row, idx) => {
+                          const isRank1 = row.rank === 1;
+                          const isRank2 = row.rank === 2;
+                          const isRank3 = row.rank === 3;
+
+                          return (
+                            <tr
+                              key={row.id}
+                              className={`${
+                                idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
+                              } hover:bg-amber-50/50 transition-colors`}
+                            >
+                              <td className="p-3.5 text-center">
+                                <span
+                                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-anton text-[13px] ${
+                                    isRank1
+                                      ? 'bg-[#FFC93C] text-[#3D0B0E] shadow-sm'
+                                      : isRank2
+                                      ? 'bg-[#C0C0C0] text-white shadow-sm'
+                                      : isRank3
+                                      ? 'bg-[#CD7F32] text-white shadow-sm'
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}
+                                >
+                                  {row.rank}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-[#3D0B0E]">
+                                {row.display_name}
+                              </td>
+                              <td className="p-3.5 text-gray-700">
+                                {row.phone_number ? `+91 ${row.phone_number}` : '-'}
+                              </td>
+                              <td className="p-3.5 text-right font-anton text-[18px] text-[#B92429]">
+                                {row.total_coins}
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <Link
+                                  href={`/admin/users/${row.id}`}
+                                  className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
+                                >
+                                  VIEW
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -348,7 +400,16 @@ function AdminDashboardContent() {
 
 export default function AdminDashboardPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center font-bold">Loading dashboard...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center font-['Montserrat',sans-serif]">
+          <div className="flex items-center gap-3 text-gray-600 font-bold">
+            <div className="w-5 h-5 border-2 border-[#B92429] border-t-transparent rounded-full animate-spin" />
+            <span>Loading admin dashboard...</span>
+          </div>
+        </div>
+      }
+    >
       <AdminDashboardContent />
     </Suspense>
   );

@@ -21,17 +21,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 
-  // 2. Calculate total coins in circulation (SUM of coin_ledger)
-  const { data: coinsData, error: coinsError } = await adminSupabase
-    .from('coin_ledger')
-    .select('amount');
+  // 2. Calculate true NET total coins in circulation (COALESCE(SUM(amount), 0))
+  let totalCoins = 0;
+  const { data: rpcCoins, error: rpcError } = await adminSupabase.rpc('get_total_coins_in_circulation');
 
-  if (coinsError) {
-    console.error('[admin/stats] Failed to fetch coins:', coinsError);
-    return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+  if (!rpcError && typeof rpcCoins === 'number') {
+    totalCoins = rpcCoins;
+  } else {
+    // Fallback: sum all entries including negative deductions/expiries
+    const { data: coinsData, error: coinsError } = await adminSupabase
+      .from('coin_ledger')
+      .select('amount');
+
+    if (coinsError) {
+      console.error('[admin/stats] Failed to fetch coins:', coinsError);
+      return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+    }
+
+    totalCoins = coinsData ? coinsData.reduce((sum, row) => sum + row.amount, 0) : 0;
   }
-
-  const totalCoins = coinsData ? coinsData.reduce((sum, row) => sum + row.amount, 0) : 0;
 
   // 3. Count total games played today (played_at >= midnight IST)
   const midnightIST = getMidnightIST();
@@ -46,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     total_users: totalUsers || 0,
-    total_coins: Math.max(0, totalCoins),
+    total_coins: totalCoins,
     total_games_today: gamesToday || 0,
   });
 }
