@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
@@ -141,6 +141,29 @@ function SymbolIcon({ symbolId }: { symbolId: number }) {
   }
 }
 
+// Sparkle Star SVG for background floating effect
+function SparkleStar({ size = 20, color = '#FFC93C' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+    </svg>
+  );
+}
+
+// 10 Staggered Sparkle positions for Celebration
+const CELEBRATION_SPARKLES = [
+  { left: '8%', top: '75%', delay: '0s', size: 16, color: '#FFC93C' },
+  { left: '20%', top: '85%', delay: '0.3s', size: 14, color: '#FFFFFF' },
+  { left: '35%', top: '70%', delay: '0.7s', size: 20, color: '#FFC93C' },
+  { left: '50%', top: '88%', delay: '0.1s', size: 16, color: '#FFFFFF' },
+  { left: '65%', top: '78%', delay: '0.5s', size: 22, color: '#FFC93C' },
+  { left: '80%', top: '82%', delay: '0.9s', size: 14, color: '#FFFFFF' },
+  { left: '92%', top: '72%', delay: '0.4s', size: 18, color: '#FFC93C' },
+  { left: '15%', top: '92%', delay: '1.1s', size: 15, color: '#FFC93C' },
+  { left: '45%', top: '94%', delay: '1.3s', size: 18, color: '#FFFFFF' },
+  { left: '72%', top: '90%', delay: '0.6s', size: 15, color: '#FFC93C' },
+];
+
 export default function SipMatchPage() {
   const router = useRouter();
   const [balance, setBalance] = useState<number>(0);
@@ -151,8 +174,13 @@ export default function SipMatchPage() {
   const [gameState, setGameState] = useState<'loading' | 'already_played' | 'playing' | 'game_over'>('loading');
   const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
   const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
-  const [matchFlashIndices, setMatchFlashIndices] = useState<number[]>([]);
-  const [mismatchFlashIndices, setMismatchFlashIndices] = useState<number[]>([]);
+
+  // Animation States
+  const [popIndices, setPopIndices] = useState<number[]>([]);
+  const [shakeIndices, setShakeIndices] = useState<number[]>([]);
+  const [isWaveAnimating, setIsWaveAnimating] = useState<boolean>(false);
+  const [pairsFlash, setPairsFlash] = useState<boolean>(false);
+  const [floatingPlusOne, setFloatingPlusOne] = useState<{ x: number; y: number; id: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // Stats
@@ -160,10 +188,6 @@ export default function SipMatchPage() {
   const [coinsWon, setCoinsWon] = useState<number>(0);
   const [todayPlayedScore, setTodayPlayedScore] = useState<{ coins: number; taps: number } | null>(null);
   const [cooldownText, setCooldownText] = useState<string>('');
-
-  // Ref to track latest tapCount inside timers without closure bugs
-  const tapCountRef = useRef<number>(0);
-  tapCountRef.current = tapCount;
 
   // Compute countdown to midnight IST
   useEffect(() => {
@@ -260,38 +284,64 @@ export default function SipMatchPage() {
         // MATCH FOUND!
         playMatchFoundSound();
         const newMatched = [...matchedIndices, firstIndex, index];
-        setMatchFlashIndices([firstIndex, index]);
         setMatchedIndices(newMatched);
         setFlippedIndices([]);
 
-        setTimeout(() => {
-          setMatchFlashIndices([]);
-        }, 350);
+        // 1. Pop animation on both cards
+        setPopIndices([firstIndex, index]);
+        setTimeout(() => setPopIndices([]), 220);
 
-        // Check if all 8 pairs (16 cards) found!
+        // 2. Pairs counter flash (white -> gold -> white)
+        setPairsFlash(true);
+        setTimeout(() => setPairsFlash(false), 400);
+
+        // 3. Floating "+1" from between the two cards
+        const col1 = firstIndex % 4;
+        const row1 = Math.floor(firstIndex / 4);
+        const col2 = index % 4;
+        const row2 = Math.floor(index / 4);
+        const midX = ((col1 + col2) / 2 + 0.5) * 25;
+        const midY = ((row1 + row2) / 2 + 0.5) * 25;
+        setFloatingPlusOne({ x: midX, y: midY, id: Date.now() });
+        setTimeout(() => setFloatingPlusOne(null), 550);
+
+        // Check if ALL 8 pairs (16 cards) found!
         if (newMatched.length === 16) {
+          setIsProcessing(true);
+
+          // STEP 1: WAVE ANIMATION across all 16 cards (takes ~1 second)
+          setIsWaveAnimating(true);
+
+          // Submit complete API in the background
+          submitGameComplete(newTaps);
+
+          // STEP 2: SCORE REVEAL — wait ~1s wave + 500ms pause = 1500ms
           setTimeout(() => {
-            handleGameComplete(newTaps);
-          }, 500);
+            setIsWaveAnimating(false);
+            playGameCompleteSound();
+            setGameState('game_over');
+          }, 1600);
         }
       } else {
         // NO MATCH!
         setIsProcessing(true);
-        setMismatchFlashIndices([firstIndex, index]);
+        setShakeIndices([firstIndex, index]);
         playNoMatchSound();
 
-        // Show both cards for 1 second, then both flip back face-down
+        // Clear shake after 220ms
+        setTimeout(() => setShakeIndices([]), 220);
+
+        // Cards stay visible for 1.2 seconds, then both flip back face-down
         setTimeout(() => {
           setFlippedIndices([]);
-          setMismatchFlashIndices([]);
           setIsProcessing(false);
-        }, 1000);
+        }, 1200);
       }
     }
   };
 
   // Complete Game API Submission
-  const handleGameComplete = async (finalTaps: number) => {
+  const submitGameComplete = async (finalTaps: number) => {
     if (!gameId) return;
 
     try {
@@ -308,19 +358,180 @@ export default function SipMatchPage() {
       const won = data.coins_won ?? 1;
       setCoinsWon(won);
       setBalance((b) => b + won);
-      playGameCompleteSound();
-      setGameState('game_over');
     } catch {
       setCoinsWon(1);
-      playGameCompleteSound();
-      setGameState('game_over');
+      setBalance((b) => b + 1);
     }
   };
 
   const pairsFound = Math.floor(matchedIndices.length / 2);
 
+  // Performance-based content helper
+  const getPerformanceDetails = () => {
+    if (tapCount === 16) {
+      return {
+        title: 'PERFECT GAME!',
+        titleColor: 'text-[#FFC93C]',
+        titleSize: 'text-[32px]',
+        glow: true,
+        coinSize: 80,
+        coinsText: '+12 SIP COINS',
+        coinsSize: 'text-[54px]',
+        subtitle: '16 taps — flawless memory!',
+        extraSparkles: true,
+      };
+    }
+    if (tapCount <= 20) {
+      return {
+        title: 'AMAZING!',
+        titleColor: 'text-[#FFC93C]',
+        titleSize: 'text-[32px]',
+        glow: false,
+        coinSize: 70,
+        coinsText: `+${coinsWon || 10} SIP COINS`,
+        coinsSize: 'text-[48px]',
+        subtitle: `${tapCount} taps — incredible memory!`,
+        extraSparkles: false,
+      };
+    }
+    if (tapCount <= 24) {
+      return {
+        title: 'WELL DONE!',
+        titleColor: 'text-white',
+        titleSize: 'text-[28px]',
+        glow: false,
+        coinSize: 60,
+        coinsText: `+${coinsWon || 8} SIP COINS`,
+        coinsSize: 'text-[44px]',
+        subtitle: `${tapCount} taps — sharp memory!`,
+        extraSparkles: false,
+      };
+    }
+    if (tapCount <= 28) {
+      return {
+        title: 'NICE!',
+        titleColor: 'text-white',
+        titleSize: 'text-[28px]',
+        glow: false,
+        coinSize: 50,
+        coinsText: `+${coinsWon || 5} SIP COINS`,
+        coinsSize: 'text-[40px]',
+        subtitle: `${tapCount} taps — keep practicing!`,
+        extraSparkles: false,
+      };
+    }
+    if (tapCount <= 32) {
+      return {
+        title: 'COMPLETED!',
+        titleColor: 'text-white',
+        titleSize: 'text-[24px]',
+        glow: false,
+        coinSize: 44,
+        coinsText: `+${coinsWon || 3} SIP COINS`,
+        coinsSize: 'text-[36px]',
+        subtitle: `${tapCount} taps — you'll do better tomorrow!`,
+        extraSparkles: false,
+      };
+    }
+    return {
+      title: 'DONE!',
+      titleColor: 'text-white',
+      titleSize: 'text-[24px]',
+      glow: false,
+      coinSize: 36,
+      coinsText: `+${coinsWon || 1} ${coinsWon === 1 ? 'SIP COIN' : 'SIP COINS'}`,
+      coinsSize: 'text-[32px]',
+      subtitle: `${tapCount} taps — tomorrow's your day!`,
+      extraSparkles: false,
+    };
+  };
+
+  const perf = getPerformanceDetails();
+
   return (
     <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429] text-white flex flex-col justify-between select-none relative overflow-x-hidden shadow-2xl">
+      <style jsx global>{`
+        @keyframes floatSparkle {
+          0% {
+            transform: translateY(0) scale(0.6) rotate(0deg);
+            opacity: 0;
+          }
+          40% {
+            opacity: 0.95;
+          }
+          80% {
+            opacity: 0.7;
+          }
+          100% {
+            transform: translateY(-80px) scale(1.1) rotate(45deg);
+            opacity: 0;
+          }
+        }
+        @keyframes floatPlusOne {
+          0% {
+            transform: translate(-50%, -50%) translateY(0);
+            opacity: 1;
+          }
+          100% {
+            transform: translate(-50%, -50%) translateY(-30px);
+            opacity: 0;
+          }
+        }
+        @keyframes coinBounce {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          65% {
+            transform: scale(1.2);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        @keyframes wavePulse {
+          0% {
+            transform: rotateY(180deg) scale(1);
+          }
+          50% {
+            transform: rotateY(180deg) scale(1.15);
+            box-shadow: 0 0 16px #ffc93c;
+            border-color: #ffc93c;
+          }
+          100% {
+            transform: rotateY(180deg) scale(1);
+          }
+        }
+        @keyframes cardShake {
+          0%,
+          100% {
+            transform: rotateY(180deg) translateX(0);
+          }
+          25% {
+            transform: rotateY(180deg) translateX(-4px);
+          }
+          50% {
+            transform: rotateY(180deg) translateX(4px);
+          }
+          75% {
+            transform: rotateY(180deg) translateX(-4px);
+          }
+        }
+        @keyframes cardPop {
+          0% {
+            transform: rotateY(180deg) scale(1);
+          }
+          50% {
+            transform: rotateY(180deg) scale(1.1);
+          }
+          100% {
+            transform: rotateY(180deg) scale(1);
+          }
+        }
+      `}</style>
+
       {/* HEADER */}
       <div className="w-full">
         <Header
@@ -369,15 +580,45 @@ export default function SipMatchPage() {
           <>
             {/* 4x4 CARD GRID */}
             <div
-              className="grid grid-cols-4 gap-2 w-full max-w-[330px] sm:max-w-[340px] aspect-square mx-auto"
+              className="grid grid-cols-4 gap-2 w-full max-w-[330px] sm:max-w-[340px] aspect-square mx-auto relative"
               style={{ perspective: '600px' }}
             >
+              {/* Floating +1 between matched cards */}
+              {floatingPlusOne && (
+                <div
+                  key={floatingPlusOne.id}
+                  style={{
+                    left: `${floatingPlusOne.x}%`,
+                    top: `${floatingPlusOne.y}%`,
+                    animation: 'floatPlusOne 0.5s ease-out forwards',
+                  }}
+                  className="absolute z-40 -translate-x-1/2 -translate-y-1/2 pointer-events-none font-anton text-[#FFC93C] text-[20px] drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+                >
+                  +1
+                </div>
+              )}
+
               {grid.map((symbolId, idx) => {
                 const isMatched = matchedIndices.includes(idx);
                 const isFlipped = flippedIndices.includes(idx);
                 const isFaceUp = isMatched || isFlipped;
-                const isGreenFlash = matchFlashIndices.includes(idx);
-                const isRedFlash = mismatchFlashIndices.includes(idx);
+                const isPopping = popIndices.includes(idx);
+                const isShaking = shakeIndices.includes(idx);
+
+                // Wave animation style with staggered 70ms delay
+                const waveStyle = isWaveAnimating
+                  ? {
+                      animation: `wavePulse 0.4s ease-in-out forwards`,
+                      animationDelay: `${idx * 70}ms`,
+                    }
+                  : {};
+
+                // Pop / Shake dynamic styles
+                const extraAnimStyle = isPopping
+                  ? { animation: 'cardPop 0.2s ease-out forwards' }
+                  : isShaking
+                  ? { animation: 'cardShake 0.2s ease-in-out forwards' }
+                  : {};
 
                 return (
                   <button
@@ -386,17 +627,19 @@ export default function SipMatchPage() {
                     onClick={() => handleCardTap(idx)}
                     disabled={gameState !== 'playing' || isProcessing || isMatched || isFlipped}
                     aria-label={`Card ${idx + 1}`}
-                    className={`relative w-full h-full cursor-pointer outline-none transition-transform duration-300 will-change-transform ${
-                      isGreenFlash ? 'scale-105' : 'scale-100'
-                    } ${gameState !== 'playing' || isProcessing ? 'cursor-default' : ''}`}
+                    className={`relative w-full h-full cursor-pointer outline-none will-change-transform ${
+                      gameState !== 'playing' || isProcessing ? 'cursor-default' : ''
+                    }`}
                   >
                     <div
+                      style={{
+                        transformStyle: 'preserve-3d',
+                        ...waveStyle,
+                        ...extraAnimStyle,
+                      }}
                       className={`w-full h-full rounded-[12px] transition-transform duration-300 motion-reduce:transition-none motion-reduce:duration-0 relative flex items-center justify-center will-change-transform ${
                         isFaceUp ? '[transform:rotateY(180deg)]' : ''
                       }`}
-                      style={{
-                        transformStyle: 'preserve-3d',
-                      }}
                     >
                       {/* CARD FACE-DOWN */}
                       <div
@@ -410,10 +653,10 @@ export default function SipMatchPage() {
                       {/* CARD FACE-UP */}
                       <div
                         className={`absolute inset-0 w-full h-full rounded-[12px] bg-white border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] transition-all duration-300 ${
-                          isGreenFlash
-                            ? 'border-[#4CAF50] ring-4 ring-[#4CAF50]/60 shadow-[0_0_12px_rgba(76,175,80,0.6)]'
-                            : isRedFlash
+                          isShaking
                             ? 'border-[#B92429] ring-4 ring-[#B92429]/60 shadow-[0_0_12px_rgba(185,36,41,0.6)]'
+                            : isPopping
+                            ? 'border-[#4CAF50] ring-4 ring-[#4CAF50]/60 shadow-[0_0_14px_rgba(76,175,80,0.7)]'
                             : isMatched
                             ? 'border-[#4CAF50]/60 shadow-md bg-[#F9FFF8]'
                             : 'border-[#F4D2CF] shadow-sm'
@@ -433,7 +676,11 @@ export default function SipMatchPage() {
                 <span className="font-montserrat font-bold text-[16px] text-white tracking-wide">
                   TAPS: {tapCount}
                 </span>
-                <span className="font-montserrat font-bold text-[16px] text-white tracking-wide">
+                <span
+                  className={`font-montserrat font-bold text-[16px] tracking-wide transition-all duration-200 ${
+                    pairsFlash ? 'text-[#FFC93C] scale-110' : 'text-white'
+                  }`}
+                >
                   PAIRS: {pairsFound}/8
                 </span>
               </div>
@@ -476,11 +723,29 @@ export default function SipMatchPage() {
         Zee Sip Memory Challenge · 1 play per day
       </div>
 
-      {/* GAME COMPLETE OVERLAY */}
+      {/* STEP 2: SCORE REVEAL OVERLAY (after wave) */}
       {gameState === 'game_over' && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-5 select-none animate-fadeIn">
-          <div className="w-full max-w-[340px] bg-white rounded-[24px] p-7 shadow-2xl flex flex-col items-center text-center relative border-4 border-[#FFC93C]">
-            {/* Top Close X */}
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-fadeIn">
+          {/* Floating Sparkle SVGs in background */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {CELEBRATION_SPARKLES.map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: s.left,
+                  top: s.top,
+                  animation: `floatSparkle ${perf.extraSparkles ? '1.5s' : '2.2s'} ease-in-out infinite ${s.delay}`,
+                }}
+              >
+                <SparkleStar size={s.size} color={s.color} />
+              </div>
+            ))}
+          </div>
+
+          {/* Centered White Card */}
+          <div className="w-full max-w-[340px] bg-white rounded-[24px] p-6 sm:p-7 shadow-2xl flex flex-col items-center text-center relative border-4 border-[#FFC93C] z-10">
+            {/* Top Close X -> /home */}
             <button
               type="button"
               onClick={() => router.push('/home')}
@@ -490,59 +755,79 @@ export default function SipMatchPage() {
               ✕
             </button>
 
-            <h2 className="font-anton text-[28px] text-[#B92429] leading-tight uppercase mb-1">
-              ALL PAIRS FOUND!
-            </h2>
+            {/* Dark Red Inner Banner for White & Gold Typography */}
+            <div className="w-full bg-[#7A1418] rounded-[20px] p-5 shadow-inner border border-[#B92429] flex flex-col items-center text-center mb-4">
+              {/* Performance Title */}
+              <h2
+                className={`font-anton ${perf.titleSize} ${perf.titleColor} leading-tight uppercase mb-2 ${
+                  perf.glow ? 'drop-shadow-[0_0_20px_rgba(255,201,60,0.6)]' : ''
+                }`}
+                style={perf.glow ? { textShadow: '0 0 20px rgba(255, 201, 60, 0.5)' } : {}}
+              >
+                {perf.title}
+              </h2>
 
-            {/* Coin SVG (60px) with scale-up animation */}
-            <div className="my-2 animate-[scaleUp_0.4s_ease-out]">
-              <svg width="60" height="60" viewBox="0 0 24 24" className="drop-shadow-lg">
-                <circle cx="12" cy="12" r="11" fill="#FFC93C" />
-                <circle cx="12" cy="12" r="7.5" fill="none" stroke="#B92429" strokeWidth="1.6" />
-                <polygon
-                  points="12,5 13.8,9.5 18.5,10.2 15,13.5 16,18.2 12,15.8 8,18.2 9,13.5 5.5,10.2 10.2,9.5"
-                  fill="#B92429"
-                />
-              </svg>
-            </div>
-
-            {/* +X SIP COINS in gold Anton 48px */}
-            <div className="font-anton text-[48px] text-[#FFC93C] leading-none drop-shadow-[0_2px_4px_rgba(61,11,14,0.3)] my-1">
-              +{coinsWon}
-            </div>
-
-            <span className="font-anton text-[20px] text-[#B92429] uppercase tracking-wide mb-2">
-              SIP COINS
-            </span>
-
-            <p className="text-[14px] font-bold text-[#7A4547] mb-2">
-              You used {tapCount} taps
-            </p>
-
-            {/* Perfect Game bonus message */}
-            {tapCount === 16 && (
-              <div className="bg-[#FFF8E7] border border-[#FFC93C] rounded-[12px] px-3 py-1.5 mb-3 flex items-center gap-1.5">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#FFC93C">
-                  <path d="M12 2L15 8.5L22 9.5L17 14.5L18.5 21.5L12 18L5.5 21.5L7 14.5L2 9.5L9 8.5L12 2Z" />
-                </svg>
-                <span className="font-anton text-[15px] text-[#D89D10] tracking-wide">
-                  PERFECT GAME!
-                </span>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#FFC93C">
-                  <path d="M12 2L15 8.5L22 9.5L17 14.5L18.5 21.5L12 18L5.5 21.5L7 14.5L2 9.5L9 8.5L12 2Z" />
+              {/* Coin SVG with Bounce Animation */}
+              <div
+                style={{
+                  animation: 'coinBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                }}
+                className="my-1.5 flex items-center justify-center"
+              >
+                <svg
+                  width={perf.coinSize}
+                  height={perf.coinSize}
+                  viewBox="0 0 24 24"
+                  className="drop-shadow-lg"
+                >
+                  <circle cx="12" cy="12" r="11" fill="#FFC93C" />
+                  <circle cx="12" cy="12" r="7.5" fill="none" stroke="#B92429" strokeWidth="1.6" />
+                  <polygon
+                    points="12,5 13.8,9.5 18.5,10.2 15,13.5 16,18.2 12,15.8 8,18.2 9,13.5 5.5,10.2 10.2,9.5"
+                    fill="#B92429"
+                  />
                 </svg>
               </div>
-            )}
 
-            <span className="text-[12px] font-medium text-[#7A4547]/80 mb-4">
+              {/* Coins Won text in gold Anton font */}
+              <div
+                className={`font-anton ${perf.coinsSize} text-[#FFC93C] leading-none drop-shadow-[0_2px_4px_rgba(61,11,14,0.4)] my-1`}
+              >
+                {perf.coinsText}
+              </div>
+
+              {/* Subtitle in white, 14px */}
+              <p className="text-[14px] font-medium text-white/95 mt-1">
+                {perf.subtitle}
+              </p>
+            </div>
+
+            {/* Total Balance Progress Bar below */}
+            <div className="w-full mb-3 px-1">
+              <div className="flex justify-between items-center text-[12px] font-bold text-[#3D0B0E] mb-1">
+                <span>Total: {balance} / 500 coins</span>
+                <span className="text-[#7A4547]">
+                  {Math.max(0, 500 - balance)} needed
+                </span>
+              </div>
+              <div className="w-full h-3 bg-[#FFF5F3] rounded-full border border-[#F4D2CF] overflow-hidden">
+                <div
+                  className="h-full bg-[#FFC93C] rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.min(100, (balance / 500) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Countdown to next game */}
+            <span className="text-[12px] font-bold text-[#7A4547] mb-3">
               Next game in {cooldownText}
             </span>
 
-            {/* CONTINUE button (brand-red, white text) */}
+            {/* CONTINUE Button (brand-red bg, white text, h-56px) -> /play */}
             <button
               type="button"
               onClick={() => router.push('/play')}
-              className="w-full h-[52px] bg-[#B92429] hover:bg-[#A31F24] text-white font-anton text-[20px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center tracking-wide"
+              className="w-full h-[56px] bg-[#B92429] hover:bg-[#A31F24] text-white font-anton text-[20px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center tracking-wide"
             >
               CONTINUE
             </button>

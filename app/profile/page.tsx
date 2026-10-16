@@ -127,7 +127,8 @@ export default function ProfilePage() {
       });
 
       if (!profileRes.ok) {
-        setErrorMsg('Something went wrong saving your phone number.');
+        const errData = await profileRes.json().catch(() => ({}));
+        setErrorMsg(errData.error || 'Something went wrong saving your phone number.');
         setIsSubmitting(false);
         return;
       }
@@ -320,6 +321,12 @@ export default function ProfilePage() {
                         autoFocus
                       />
                     </div>
+                    {/* Error message in red below input */}
+                    {errorMsg && (
+                      <p className="text-[12px] font-bold text-[#B92429] bg-[#FFF5F3] p-2.5 rounded-xl border border-[#F4D2CF] leading-snug">
+                        {errorMsg}
+                      </p>
+                    )}
                   </div>
 
                   {/* RED WARNING BOX below phone */}
@@ -342,13 +349,6 @@ export default function ProfilePage() {
                       Enter your real WhatsApp number. We&apos;ll contact you here to deliver your Zee Sip reward. Wrong numbers cannot claim rewards.
                     </p>
                   </div>
-
-                  {/* Error Message */}
-                  {errorMsg && (
-                    <p className="text-xs font-bold text-[#B92429] bg-[#FFF5F3] p-2.5 rounded-xl text-center border border-[#F4D2CF]">
-                      {errorMsg}
-                    </p>
-                  )}
 
                   {/* SAVE Button: "SAVE & START PLAYING" for new user, "SAVE" for editing */}
                   <button

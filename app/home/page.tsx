@@ -35,7 +35,9 @@ export default function HomePage() {
 
   // Two New Games Statuses
   const [isMatchDoneToday, setIsMatchDoneToday] = useState<boolean>(false);
+  const [matchCoinsWon, setMatchCoinsWon] = useState<number>(0);
   const [isSliceDoneToday, setIsSliceDoneToday] = useState<boolean>(false);
+  const [sliceCoinsWon, setSliceCoinsWon] = useState<number>(0);
 
   // Scan Bottle Coming Soon Modal
   const [isComingSoonOpen, setIsComingSoonOpen] = useState<boolean>(false);
@@ -162,14 +164,20 @@ export default function HomePage() {
         .order('played_at', { ascending: false })
         .then(({ data: plays }) => {
           if (plays) {
-            const matchPlay = plays.find((p) => p.game_type === 'sip_match');
+            const matchPlay = plays.find(
+              (p) => p.game_type === 'sip_match' && (p.coins_won > 0 || p.result?.status === 'completed')
+            );
             if (matchPlay) {
               setIsMatchDoneToday(true);
+              setMatchCoinsWon(matchPlay.coins_won || 0);
             }
 
-            const slicePlay = plays.find((p) => p.game_type === 'sip_slice');
+            const slicePlay = plays.find(
+              (p) => p.game_type === 'sip_slice' && (p.coins_won > 0 || p.result?.status === 'completed')
+            );
             if (slicePlay) {
               setIsSliceDoneToday(true);
+              setSliceCoinsWon(slicePlay.coins_won || 0);
             }
           }
         });
@@ -313,8 +321,12 @@ export default function HomePage() {
                     <span className="text-[14px] font-extrabold text-[#3D0B0E]">
                       Sip Match
                     </span>
-                    <span className="text-[11px] font-bold text-[#7A4547]">
-                      {isMatchDoneToday ? 'Done today' : 'Play now'}
+                    <span
+                      className={`text-[11px] font-bold ${
+                        isMatchDoneToday ? 'text-[#8FC31F]' : 'text-[#7A4547]'
+                      }`}
+                    >
+                      {isMatchDoneToday ? `Done today ✓ (+${matchCoinsWon} coins)` : 'Play now'}
                     </span>
                   </div>
                 </div>
@@ -344,8 +356,12 @@ export default function HomePage() {
                     <span className="text-[14px] font-extrabold text-[#3D0B0E]">
                       Sip Slice
                     </span>
-                    <span className="text-[11px] font-bold text-[#7A4547]">
-                      {isSliceDoneToday ? 'Done today' : 'Play now'}
+                    <span
+                      className={`text-[11px] font-bold ${
+                        isSliceDoneToday ? 'text-[#8FC31F]' : 'text-[#7A4547]'
+                      }`}
+                    >
+                      {isSliceDoneToday ? `Done today ✓ (+${sliceCoinsWon} coins)` : 'Play now'}
                     </span>
                   </div>
                 </div>
@@ -376,6 +392,13 @@ export default function HomePage() {
                 </span>
               </button>
             </div>
+
+            {/* All done message if both games are played today */}
+            {isMatchDoneToday && isSliceDoneToday && (
+              <p className="text-center text-[14px] text-[#7A4547]/80 font-bold mt-1">
+                All done for today! Come back tomorrow for more coins.
+              </p>
+            )}
           </div>
 
           {/* ACTIVITY SUMMARY AT THE BOTTOM */}

@@ -27,6 +27,21 @@ export async function POST(req: NextRequest) {
 
   const cleanedPhone = phone_number ? String(phone_number).replace(/\D/g, '') : null;
   if (cleanedPhone) {
+    // Prevent multi-account abuse: check if another account already has this phone number
+    const { data: duplicate } = await adminSupabase
+      .from('profiles')
+      .select('id')
+      .eq('phone_number', cleanedPhone)
+      .neq('id', user.id)
+      .limit(1);
+
+    if (duplicate && duplicate.length > 0) {
+      return NextResponse.json(
+        { error: 'This number is already linked to another account. Each number can only be used once.' },
+        { status: 409 }
+      );
+    }
+
     completedTasks.profile_completed = true;
   }
 
