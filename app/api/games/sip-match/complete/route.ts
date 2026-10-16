@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateLastGamePlayed } from '@/lib/gameUtils';
 
-export function calculateSipMatchCoins(totalTaps: number, isFirstPlay = false): number {
+function calculateSipMatchCoins(totalTaps: number, isFirstPlay = false): number {
   let coins = 1;
   if (totalTaps === 16) coins = 12;
   else if (totalTaps <= 20) coins = 10;

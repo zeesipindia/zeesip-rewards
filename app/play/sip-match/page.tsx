@@ -14,7 +14,7 @@ import {
 } from '@/lib/sound';
 
 // 8 Pure SVG Icons for Symbols
-export function SymbolIcon({ symbolId }: { symbolId: number }) {
+function SymbolIcon({ symbolId }: { symbolId: number }) {
   switch (symbolId) {
     case 0:
       // 1. Mango bottle — green (#CDEE1C) bottle shape with leaf

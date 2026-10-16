@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateLastGamePlayed } from '@/lib/gameUtils';
-import { BottleSpawn } from '../start/route';
+import { BottleSpawn } from '@/lib/bottleTypes';
 
 interface SipSliceState {
   bottles: BottleSpawn[];

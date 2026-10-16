@@ -2,17 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hasPlayedGameToday } from '@/lib/gameUtils';
-
-export type BottleType = 'mango' | 'pineapple' | 'gold' | 'expired';
-
-export interface BottleSpawn {
-  index: number;
-  type: BottleType;
-  appear_at_ms: number;
-  start_x: number; // 15 to 85 (%)
-  arc_height: number; // 55 to 80 (% of height)
-  speed: number; // duration in ms (2000 to 2400)
-}
+import { BottleType, BottleSpawn } from '@/lib/bottleTypes';
 
 function generateSequence(): BottleSpawn[] {
   const bottles: BottleSpawn[] = [];

@@ -10,7 +10,7 @@ import {
   playLowBuzzer,
   playGameEndJingle,
 } from '@/lib/sound';
-import { BottleSpawn, BottleType } from '@/app/api/games/sip-slice/start/route';
+import { BottleSpawn, BottleType } from '@/lib/bottleTypes';
 
 interface ActiveBottle {
   id: number;
