@@ -125,7 +125,7 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] w-full flex flex-col justify-between bg-[#B92429] text-white relative overflow-hidden select-none">
+    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto flex flex-col justify-between bg-[#B92429] text-white relative overflow-hidden select-none shadow-2xl">
       {/* Toast Notification Popup */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] bg-[#3D0B0E] text-[#FFC93C] font-['Montserrat',sans-serif] font-bold text-xs px-5 py-3 rounded-full shadow-2xl border border-[#FFC93C]/40 animate-bounce text-center max-w-[340px]">

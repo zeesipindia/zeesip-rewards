@@ -49,10 +49,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://ooziftqctxziegrrrmdv.supabase.co" />
       </head>
-      <body className="min-h-full bg-[#3D0B0E] text-[#3D0B0E] flex justify-center items-stretch selection:bg-[#FFC93C] selection:text-[#3D0B0E]">
-        <div className="w-full max-w-[390px] min-h-[100dvh] relative flex flex-col shadow-2xl overflow-x-hidden bg-[#FFF5F3]">
-          {children}
-        </div>
+      <body className="min-h-full bg-[#3D0B0E] text-[#3D0B0E] selection:bg-[#FFC93C] selection:text-[#3D0B0E]">
+        {children}
       </body>
     </html>
   );
