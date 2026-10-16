@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { hasPlayedGameToday } from '@/lib/gameUtils';
+import { getMidnightIST, getNextMidnightIST } from '@/lib/gameUtils';
 
 function shuffle<T>(array: T[]): T[] {
   const arr = [...array];
@@ -20,44 +20,55 @@ export async function POST() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // 1. Check if already played today (resets at midnight IST)
-  const status = await hasPlayedGameToday(user.id, 'sip_match');
-  if (status.played) {
+  const adminSupabase = createAdminClient();
+  const midnightIST = getMidnightIST();
+  const nextAvailable = getNextMidnightIST().toISOString();
+
+  // 1. Check if user already played today (resets at midnight IST)
+  const { data: plays } = await adminSupabase
+    .from('game_plays')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('game_type', 'sip_match')
+    .gte('played_at', midnightIST.toISOString())
+    .order('played_at', { ascending: false });
+
+  // If a completed play exists today: return 409 with details
+  const completedPlay = plays?.find(
+    (p) => p.coins_won > 0 || (p.result && p.result.status === 'completed')
+  );
+
+  if (completedPlay) {
     return NextResponse.json(
-      { error: 'Already played today', next_available: status.nextAvailable },
+      {
+        error: 'Already played today',
+        already_played: true,
+        next_available: nextAvailable,
+        coins_won: completedPlay.coins_won || 0,
+        total_taps: completedPlay.result?.total_taps || 16,
+        grid: completedPlay.result?.grid || [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7],
+      },
       { status: 409 }
     );
   }
 
-  // 2. Generate 4x4 grid: 8 pairs of symbols (0 to 7)
+  // If user has an in-progress game from today, allow resuming it
+  const activePlay = plays?.find((p) => p.result && p.result.status === 'playing');
+  if (activePlay && Array.isArray(activePlay.result.grid) && activePlay.result.grid.length === 16) {
+    return NextResponse.json({
+      game_id: activePlay.id,
+      grid: activePlay.result.grid,
+    });
+  }
+
+  // 2. Generate random 4x4 grid: 8 pairs (2 of each symbol 0 to 7)
   const symbols = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7];
   const grid = shuffle(symbols);
 
-  // 3. Generate random round order for the 8 pairs
-  const roundOrder = shuffle([0, 1, 2, 3, 4, 5, 6, 7]);
-
-  // 4. For each round, choose one card of the pair to reveal, and the other is the target
-  const roundsData = roundOrder.map((sym) => {
-    const positions: number[] = [];
-    grid.forEach((v, idx) => {
-      if (v === sym) positions.push(idx);
-    });
-    const revealFirst = Math.random() < 0.5;
-    const revealed = revealFirst ? positions[0] : positions[1];
-    const match = revealFirst ? positions[1] : positions[0];
-    return { symbol: sym, revealed, match };
-  });
-
-  const adminSupabase = createAdminClient();
-
   const initialResult = {
     grid,
-    round_order: roundOrder,
-    rounds_data: roundsData,
-    current_round: 0,
-    matched_pairs: [] as number[],
-    correct_count: 0,
-    is_completed: false,
+    status: 'playing',
+    created_at: new Date().toISOString(),
   };
 
   const { data: gamePlay, error: insertError } = await adminSupabase
@@ -78,7 +89,5 @@ export async function POST() {
   return NextResponse.json({
     game_id: gamePlay.id,
     grid,
-    round_order: roundOrder,
-    rounds_data: roundsData,
   });
 }
