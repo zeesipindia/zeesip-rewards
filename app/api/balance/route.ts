@@ -61,7 +61,7 @@ export async function GET() {
         user_id: user.id,
         amount: -currentBalance,
         source: 'EXPIRY',
-        description: 'Coins expired — inactive for 14+ days',
+        description: 'Coins expired — no activity for 14+ days',
       });
 
       if (!expiryErr) {

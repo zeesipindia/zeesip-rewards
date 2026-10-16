@@ -132,15 +132,20 @@ export default function HomePage() {
       const midnightIST = new Date(istMidnightUTC.getTime() - istOffsetMs);
 
       // Fetch ledger history & coins earned today
+      // Fetch ledger history & coins earned today (excluding admin adjustments and expiry)
       supabase
         .from('coin_ledger')
         .select('*')
         .eq('user_id', user.id)
+        .not('source', 'in', '("ADMIN_ADJUSTMENT","EXPIRY")')
         .order('created_at', { ascending: false })
         .then(({ data: ledger }) => {
           if (ledger) {
-            setHistoryEntries(ledger as HistoryEntry[]);
-            const todayEntries = ledger.filter(
+            const clean = (ledger as HistoryEntry[]).filter(
+              (item) => item.source !== 'ADMIN_ADJUSTMENT' && item.source !== 'EXPIRY'
+            );
+            setHistoryEntries(clean);
+            const todayEntries = clean.filter(
               (item) => new Date(item.created_at) >= midnightIST && item.amount > 0
             );
             const todaySum = todayEntries.reduce((sum, item) => sum + item.amount, 0);
@@ -442,7 +447,7 @@ export default function HomePage() {
             <div className="max-h-64 overflow-y-auto flex flex-col gap-2.5 pr-1">
               {historyEntries.length === 0 ? (
                 <p className="text-xs text-[#7A4547] text-center py-4 font-bold">
-                  No coin transaction history yet.
+                  No activity yet. Play games to earn Sip Coins!
                 </p>
               ) : (
                 historyEntries.map((entry) => (
