@@ -4,7 +4,10 @@ export interface BottleSpawn {
   index: number;
   type: BottleType;
   appear_at_ms: number;
-  start_x: number; // 15 to 85 (%)
-  arc_height: number; // 55 to 80 (% of height)
-  speed: number; // duration in ms (2000 to 2400)
+  start_x_percent: number; // 0.10 to 0.90
+  drift_x: number; // horizontal drift in pixels across flight (-80 to +80)
+  peak_height_percent: number; // 0.28 to 0.68 (fraction of screen height from top)
+  flight_duration_ms: number; // 2100 to 2500 ms
+  initial_rotation: number; // -30 to +30 deg
+  rotation_speed: number; // deg per second, e.g. -180 to +180
 }
