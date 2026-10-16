@@ -11,22 +11,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const {
-    display_name,
-    pincode,
-    phone_number,
-    team,
-    whatsapp_consent,
-    delivery_name,
-    address_line1,
-    address_line2,
-    city,
-    state,
-  } = body;
+  const { phone_number, display_name } = body;
 
   const adminSupabase = createAdminClient();
 
-  // Fetch current profile to preserve existing fields if not provided
+  // Fetch current profile to preserve existing fields
   const { data: existingProfile } = await adminSupabase
     .from('profiles')
     .select('*')
@@ -36,33 +25,20 @@ export async function POST(req: NextRequest) {
   const isNewProfile = !existingProfile || !existingProfile.phone_number;
   const completedTasks = existingProfile?.completed_tasks || {};
 
-  // All profile bonuses removed — completing profile, address, and team gives 0 coins
-  if (display_name && phone_number && pincode) {
+  const cleanedPhone = phone_number ? String(phone_number).replace(/\D/g, '') : null;
+  if (cleanedPhone) {
     completedTasks.profile_completed = true;
   }
-  if (address_line1 && city) {
-    completedTasks.address_completed = true;
-  }
-  if (team) {
-    completedTasks.team_selected = true;
-  }
 
-  // Upsert profile
+  // Upsert profile with phone number
   const { error: updateError } = await adminSupabase
     .from('profiles')
     .upsert({
       id: user.id,
       email: user.email || '',
-      display_name: display_name || existingProfile?.display_name || user.user_metadata?.full_name || 'Sipper',
-      phone_number: phone_number || existingProfile?.phone_number || null,
-      pincode: pincode || existingProfile?.pincode || null,
-      team: team || existingProfile?.team || null,
-      whatsapp_consent: whatsapp_consent !== undefined ? whatsapp_consent : existingProfile?.whatsapp_consent ?? true,
-      delivery_name: delivery_name || existingProfile?.delivery_name || display_name || null,
-      address_line1: address_line1 || existingProfile?.address_line1 || null,
-      address_line2: address_line2 || existingProfile?.address_line2 || null,
-      city: city || existingProfile?.city || null,
-      state: state || existingProfile?.state || 'Kerala',
+      display_name: display_name || existingProfile?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || 'Zee Sipper',
+      phone_number: cleanedPhone || existingProfile?.phone_number || null,
+      avatar_url: existingProfile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
       completed_tasks: completedTasks,
     });
 

@@ -8,6 +8,7 @@ import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { BottomNav } from '@/components/BottomNav';
 import { CheckIcon } from '@/components/Icons';
+import { ComingSoonModal } from '@/components/ComingSoonModal';
 import { createClient } from '@/lib/supabase/client';
 import { getCachedBalance, fetchAndCacheBalance } from '@/lib/balanceCache';
 
@@ -34,10 +35,10 @@ export default function HomePage() {
 
   // Two New Games Statuses
   const [isMatchDoneToday, setIsMatchDoneToday] = useState<boolean>(false);
-  const [matchCoinsWon, setMatchCoinsWon] = useState<number>(0);
-
   const [isSliceDoneToday, setIsSliceDoneToday] = useState<boolean>(false);
-  const [sliceCoinsWon, setSliceCoinsWon] = useState<number>(0);
+
+  // Scan Bottle Coming Soon Modal
+  const [isComingSoonOpen, setIsComingSoonOpen] = useState<boolean>(false);
 
   // Expiry states
   const [daysSinceLastPlay, setDaysSinceLastPlay] = useState<number>(0);
@@ -79,33 +80,26 @@ export default function HomePage() {
 
       // Check for pending guest session coins and claim them
       const pendingGuestId = typeof window !== 'undefined' ? localStorage.getItem('guest_session_id') : null;
-      const pendingPhone = typeof window !== 'undefined' ? localStorage.getItem('guest_phone_number') : null;
 
-      fetch('/api/claim-guest-coins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          guest_session_id: pendingGuestId,
-          phone_number: pendingPhone || undefined,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (pendingGuestId) {
+      if (pendingGuestId) {
+        fetch('/api/claim-guest-coins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guest_session_id: pendingGuestId,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
             try {
               localStorage.removeItem('guest_session_id');
             } catch {}
-          }
-          if (pendingPhone) {
-            try {
-              localStorage.removeItem('guest_phone_number');
-            } catch {}
-          }
-          if (data.claimedCoins) {
-            fetchBalanceAndExpiry();
-          }
-        })
-        .catch(() => {});
+            if (data.claimedCoins) {
+              fetchBalanceAndExpiry();
+            }
+          })
+          .catch(() => {});
+      }
 
       // Prefetch routes for instant navigation
       router.prefetch('/profile');
@@ -166,13 +160,11 @@ export default function HomePage() {
             const matchPlay = plays.find((p) => p.game_type === 'sip_match');
             if (matchPlay) {
               setIsMatchDoneToday(true);
-              setMatchCoinsWon(matchPlay.coins_won);
             }
 
             const slicePlay = plays.find((p) => p.game_type === 'sip_slice');
             if (slicePlay) {
               setIsSliceDoneToday(true);
-              setSliceCoinsWon(slicePlay.coins_won);
             }
           }
         });
@@ -288,7 +280,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* THINGS TO DO SECTION - ONLY THE TWO NEW GAMES */}
+          {/* THINGS TO DO SECTION - ONLY THE TWO NEW GAMES + SCAN BOTTLE */}
           <div className="flex flex-col gap-3 mt-1">
             <h2 className="text-[26px] font-anton text-[#B92429] uppercase tracking-wide">
               THINGS TO DO
@@ -317,7 +309,7 @@ export default function HomePage() {
                       Sip Match
                     </span>
                     <span className="text-[11px] font-bold text-[#7A4547]">
-                      {isMatchDoneToday ? `Done today (+${matchCoinsWon} coins)` : 'Play memory game'}
+                      {isMatchDoneToday ? 'Done today' : 'Play now'}
                     </span>
                   </div>
                 </div>
@@ -348,7 +340,7 @@ export default function HomePage() {
                       Sip Slice
                     </span>
                     <span className="text-[11px] font-bold text-[#7A4547]">
-                      {isSliceDoneToday ? `Done today (+${sliceCoinsWon} coins)` : 'Slice bottles in the air'}
+                      {isSliceDoneToday ? 'Done today' : 'Play now'}
                     </span>
                   </div>
                 </div>
@@ -356,6 +348,28 @@ export default function HomePage() {
                   {isSliceDoneToday ? 'DONE' : 'up to +10'}
                 </span>
               </Link>
+
+              {/* 3. Scan a Zee Sip bottle (Coming Soon) */}
+              <button
+                type="button"
+                onClick={() => setIsComingSoonOpen(true)}
+                className="w-full bg-gray-50/90 rounded-[18px] p-3.5 shadow-sm border-l-4 border-l-gray-400 flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer text-left opacity-80"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full border-2 border-gray-400 bg-transparent" />
+                  <div className="flex flex-col">
+                    <span className="text-[14px] font-extrabold text-gray-700">
+                      Scan a Zee Sip bottle
+                    </span>
+                    <span className="text-[11px] font-bold text-gray-500">
+                      Scan QR code on bottle
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 font-anton text-[10px] uppercase">
+                  COMING SOON
+                </span>
+              </button>
             </div>
           </div>
 
@@ -458,6 +472,12 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Coming Soon Modal */}
+      <ComingSoonModal
+        isOpen={isComingSoonOpen}
+        onClose={() => setIsComingSoonOpen(false)}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav />

@@ -61,10 +61,10 @@ export async function GET(req: NextRequest) {
         console.error('[auth/callback] Error claiming guest session:', claimErr);
       }
 
-      // MINIMUM query: SELECT only display_name, phone_number, pincode to check completeness
+      // Check if user has saved phone_number
       const { data: profile } = await adminSupabase
         .from('profiles')
-        .select('display_name, phone_number, pincode')
+        .select('phone_number')
         .eq('id', user.id)
         .single();
 
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
 
         targetRedirect = `${baseUrl}/profile`;
       } else {
-        const isComplete = Boolean(profile.display_name && profile.phone_number && profile.pincode);
+        const isComplete = Boolean(profile.phone_number);
         if (!isComplete) {
           targetRedirect = `${baseUrl}/profile`;
         } else {

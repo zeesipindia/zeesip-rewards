@@ -10,10 +10,9 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function LandingPage() {
   const router = useRouter();
-  const [viewState, setViewState] = useState<'landing' | 'spinning' | 'win' | 'phone'>('landing');
+  const [viewState, setViewState] = useState<'landing' | 'spinning' | 'win'>('landing');
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [wonAmount, setWonAmount] = useState<number>(30);
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
@@ -87,14 +86,6 @@ export default function LandingPage() {
   const handleGoogleAuth = async () => {
     if (isAuthLoading) return;
 
-    // Save phone number to localStorage if entered (Task 5)
-    const cleanedPhone = phoneNumber.replace(/\D/g, '');
-    if (cleanedPhone) {
-      try {
-        localStorage.setItem('guest_phone_number', cleanedPhone);
-      } catch {}
-    }
-
     setIsAuthLoading(true);
     setErrorMsg(null);
 
@@ -105,7 +96,6 @@ export default function LandingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_type: 'GOOGLE_AUTH_STARTED',
-          metadata: { phone_entered: Boolean(cleanedPhone) },
         }),
       }).catch(() => {});
 
@@ -255,89 +245,12 @@ export default function LandingPage() {
               </span>
             </div>
 
-            {/* SAVE MY 30 COINS button -> proceeds to Phone collection step */}
-            <button
-              type="button"
-              onClick={() => setViewState('phone')}
-              className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              SAVE MY {wonAmount} COINS
-            </button>
-
-            <span className="text-[12px] font-bold text-[#7A4547] mt-2">
-              Claim your coins before they expire
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* TASK 5: PHONE NUMBER COLLECTION SCREEN */}
-      {viewState === 'phone' && (
-        <div className="fixed inset-0 z-[100] bg-[#B92429] flex flex-col items-center justify-center p-5 select-none animate-fadeIn overflow-y-auto">
-          {/* 30 COINS WAITING BADGE */}
-          <div className="mb-5 inline-flex items-center gap-2 bg-[#FFC93C] text-[#3D0B0E] px-4 py-2 rounded-full shadow-lg border-2 border-[#3D0B0E] animate-bounce">
-            <CoinIcon size={20} />
-            <span className="font-anton text-[16px] tracking-wide uppercase">
-              {wonAmount} COINS WAITING
-            </span>
-          </div>
-
-          {/* White Card */}
-          <div className="w-full max-w-[360px] bg-white rounded-[28px] p-6 shadow-2xl flex flex-col gap-4 text-left border-4 border-[#FFC93C]">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-extrabold text-[#7A4547] tracking-wider uppercase font-['Montserrat',sans-serif]">
-                YOUR WHATSAPP NUMBER
-              </label>
-              <div className="flex items-center w-full h-[52px] rounded-[16px] border-2 border-[#F4D2CF] focus-within:border-[#B92429] bg-[#FFF5F3] overflow-hidden">
-                <span className="px-3.5 font-bold text-[15px] text-[#7A4547] bg-[#FCE4E1] h-full flex items-center border-r border-[#F4D2CF]">
-                  +91
-                </span>
-                <input
-                  type="tel"
-                  maxLength={10}
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                  placeholder="98765 43210"
-                  className="w-full h-full px-3.5 outline-none font-bold text-[16px] text-[#3D0B0E] bg-transparent"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* RED WARNING BOX */}
-            <div
-              style={{
-                backgroundColor: '#7A1418',
-                color: '#FFFFFF',
-                borderRadius: '14px',
-                padding: '12px',
-              }}
-              className="flex items-start gap-3 shadow-md"
-            >
-              {/* Yellow Warning Triangle SVG */}
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                <path d="M12 2L1 21H23L12 2Z" fill="#FFC93C" />
-                <path d="M12 9V14" stroke="#7A1418" strokeWidth="2" strokeLinecap="round" />
-                <circle cx="12" cy="17" r="1.25" fill="#7A1418" />
-              </svg>
-              <p className="text-[11.5px] font-bold leading-snug font-['Montserrat',sans-serif]">
-                Enter your real WhatsApp number. We&apos;ll contact you here to deliver your Zee Sip reward. Wrong numbers cannot claim rewards.
-              </p>
-            </div>
-
-            {/* Error Message */}
-            {errorMsg && (
-              <p className="text-xs font-bold text-[#B92429] bg-[#FFF5F3] p-2.5 rounded-xl text-center border border-[#F4D2CF]">
-                {errorMsg}
-              </p>
-            )}
-
-            {/* CONTINUE WITH GOOGLE BUTTON */}
+            {/* SAVE MY 30 COINS button -> proceeds straight to Google OAuth */}
             <button
               type="button"
               onClick={handleGoogleAuth}
               disabled={isAuthLoading}
-              className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[20px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75"
+              className="w-full h-[56px] bg-[#FFC93C] hover:bg-[#FFE14D] active:scale-[0.98] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75"
             >
               {isAuthLoading ? (
                 <div className="flex items-center gap-2">
@@ -345,12 +258,12 @@ export default function LandingPage() {
                   <span>CONNECTING...</span>
                 </div>
               ) : (
-                <span>CONTINUE WITH GOOGLE</span>
+                <span>SAVE MY {wonAmount} COINS</span>
               )}
             </button>
 
-            <span className="text-[12px] font-bold text-[#7A4547] text-center">
-              We&apos;ll save your coins after sign-in
+            <span className="text-[12px] font-bold text-[#7A4547] mt-2">
+              Claim your coins before they expire
             </span>
           </div>
         </div>
