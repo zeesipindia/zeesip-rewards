@@ -133,10 +133,17 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', game_id);
 
+  const { data: ledgerEntries } = await adminSupabase
+    .from('coin_ledger')
+    .select('amount')
+    .eq('user_id', user.id);
+  const newBalance = ledgerEntries ? ledgerEntries.reduce((sum, item) => sum + item.amount, 0) : finalScore;
+
   return NextResponse.json({
     coins_won: finalScore,
     bottles_sliced: validSlicedCount,
     total_bottles: totalBottles,
     hit_expired: didHitExpired,
+    new_balance: newBalance,
   });
 }

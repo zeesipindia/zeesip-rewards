@@ -3,267 +3,562 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Header } from '@/components/Header';
 import { CoinIcon } from '@/components/CoinIcon';
 import { createClient } from '@/lib/supabase/client';
 import { BottleType, BottleSpawn } from '@/lib/bottleTypes';
 import {
-  playSliceShing,
-  playJuiceSplat,
-  playGoldPling,
-  playExpiredHit,
-  playGameCompleteSound,
+  initAudioContext,
+  playBladeSwoosh,
+  playSliceHit,
+  playJuiceSplash,
+  playGoldBonus,
+  playExpiredThud,
+  playComboChime,
 } from '@/lib/sound';
 
-// Bottle SVG Component (~50px x ~90px)
-function BottleSVG({ type }: { type: BottleType }) {
-  if (type === 'mango') {
-    return (
-      <svg width="50" height="90" viewBox="0 0 50 90" fill="none">
-        <rect x="19" y="3" width="12" height="6" rx="2" fill="#8FC31F" />
-        <rect x="22" y="9" width="6" height="8" rx="1" fill="#CDEE1C" />
-        <path
-          d="M16 17H34C39 17 43 21 43 26V75C43 82 39 86 33 86H17C11 86 7 82 7 75V26C7 21 11 17 16 17Z"
-          fill="#CDEE1C"
-        />
-        <circle cx="25" cy="50" r="13" fill="#8FC31F" />
-        <text
-          x="25"
-          y="56"
-          fill="white"
-          fontFamily="Arial, sans-serif"
-          fontWeight="900"
-          fontSize="16"
-          textAnchor="middle"
-        >
-          M
-        </text>
-      </svg>
-    );
-  }
-
-  if (type === 'pineapple') {
-    return (
-      <svg width="50" height="90" viewBox="0 0 50 90" fill="none">
-        <rect x="19" y="3" width="12" height="6" rx="2" fill="#F5B800" />
-        <rect x="22" y="9" width="6" height="8" rx="1" fill="#FFE14D" />
-        <path
-          d="M16 17H34C39 17 43 21 43 26V75C43 82 39 86 33 86H17C11 86 7 82 7 75V26C7 21 11 17 16 17Z"
-          fill="#FFE14D"
-        />
-        <circle cx="25" cy="50" r="13" fill="#F5B800" />
-        <text
-          x="25"
-          y="56"
-          fill="white"
-          fontFamily="Arial, sans-serif"
-          fontWeight="900"
-          fontSize="16"
-          textAnchor="middle"
-        >
-          P
-        </text>
-      </svg>
-    );
-  }
-
-  if (type === 'gold') {
-    return (
-      <svg width="50" height="90" viewBox="0 0 50 90" fill="none" className="drop-shadow-[0_0_12px_#FFC93C]">
-        <rect x="19" y="3" width="12" height="6" rx="2" fill="#B8860B" />
-        <rect x="22" y="9" width="6" height="8" rx="1" fill="#FFC93C" />
-        <path
-          d="M16 17H34C39 17 43 21 43 26V75C43 82 39 86 33 86H17C11 86 7 82 7 75V26C7 21 11 17 16 17Z"
-          fill="#FFC93C"
-        />
-        <circle cx="25" cy="50" r="13" fill="#B8860B" />
-        <polygon
-          points="25,40 27.5,46 34,47 29,51.5 30.5,58 25,54.5 19.5,58 21,51.5 16,47 22.5,46"
-          fill="#FFC93C"
-        />
-      </svg>
-    );
-  }
-
-  // Expired bottle
-  return (
-    <svg width="50" height="90" viewBox="0 0 50 90" fill="none">
-      <rect x="19" y="3" width="12" height="6" rx="2" fill="#555555" />
-      <rect x="22" y="9" width="6" height="8" rx="1" fill="#808080" />
-      <path
-        d="M16 17H34C39 17 43 21 43 26V75C43 82 39 86 33 86H17C11 86 7 82 7 75V26C7 21 11 17 16 17Z"
-        fill="#808080"
-      />
-      <path d="M12 30L26 44L17 58M38 48L24 64L32 78" stroke="#333333" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="25" cy="50" r="13" fill="#555555" />
-      <text
-        x="25"
-        y="56"
-        fill="#B92429"
-        fontFamily="Arial, sans-serif"
-        fontWeight="900"
-        fontSize="18"
-        textAnchor="middle"
-      >
-        ✕
-      </text>
-    </svg>
-  );
-}
-
-// Slice particle definitions
-interface SlicedHalf {
-  id: number;
-  type: BottleType;
-  x: number;
-  y: number;
-  angle: number;
-}
-
-interface JuiceDroplet {
-  id: number;
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  size: number;
-  color: string;
-}
-
-interface ScorePop {
-  id: number;
-  text: string;
-  x: number;
-  y: number;
-}
-
-interface ActiveBottlePhysics {
+interface ActiveBottle {
   index: number;
   type: BottleType;
+  appearAtMs: number;
+  startX: number;
+  startY: number;
+  peakY: number;
+  vx: number;
+  vy0: number;
+  gravity: number;
+  rotSpeed: number;
+  initialRot: number;
+  flightDuration: number;
   x: number;
   y: number;
   rotation: number;
-  isAlive: boolean;
+  isSliced: boolean;
+  isRemoved: boolean;
 }
 
-// Geometry helper: distance from point (px, py) to line segment (x1, y1)-(x2, y2)
-function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+interface BottleHalf {
+  id: string;
+  type: BottleType;
+  x: number;
+  y: number;
+  side: 'left' | 'right';
+  sliceAngle: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  rotSpeed: number;
+  createdAt: number;
+}
+
+interface JuiceDroplet {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  lightColor: string;
+  darkColor: string;
+  vx: number;
+  vy: number;
+  createdAt: number;
+}
+
+interface JuiceSplat {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  borderRadius: string;
+  rotation: number;
+  createdAt: number;
+}
+
+interface ScorePop {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  fontSize: number;
+  createdAt: number;
+}
+
+interface TrailPoint {
+  x: number;
+  y: number;
+  time: number;
+}
+
+type GameState =
+  | 'loading'
+  | 'start'
+  | 'countdown'
+  | 'playing'
+  | 'paused'
+  | 'expired_hit'
+  | 'times_up'
+  | 'result'
+  | 'already_played';
+
+// -------------------------------------------------------------
+// BOTTLE SVG DRAWING (Zee Sip Authentic Design)
+// -------------------------------------------------------------
+function BottleGraphic({
+  type,
+  clipSide,
+}: {
+  type: BottleType;
+  clipSide?: 'left' | 'right';
+}) {
+  const liquidColor =
+    type === 'mango'
+      ? '#CDEE1C'
+      : type === 'pineapple'
+      ? '#FFE14D'
+      : type === 'gold'
+      ? '#FFC93C'
+      : '#555555';
+
+  const capColor =
+    type === 'mango'
+      ? '#8FC31F'
+      : type === 'pineapple'
+      ? '#F5B800'
+      : type === 'gold'
+      ? '#B8860B'
+      : '#333333';
+
+  const labelBg =
+    type === 'mango'
+      ? '#8FC31F'
+      : type === 'pineapple'
+      ? '#F5B800'
+      : type === 'gold'
+      ? '#B8860B'
+      : '#333333';
+
+  const labelText =
+    type === 'mango' ? 'M' : type === 'pineapple' ? 'P' : type === 'gold' ? '★' : 'X';
+
+  const labelTextColor =
+    type === 'mango'
+      ? '#2D4404'
+      : type === 'pineapple'
+      ? '#594300'
+      : type === 'gold'
+      ? '#FFF'
+      : '#B92429';
+
+  return (
+    <div
+      className={`relative w-[46px] h-[82px] select-none pointer-events-none transition-transform ${
+        type === 'gold' ? 'animate-pulse' : ''
+      }`}
+      style={{
+        filter:
+          type === 'gold'
+            ? 'drop-shadow(0 0 16px rgba(255,201,60,0.9))'
+            : type === 'expired'
+            ? 'drop-shadow(0 0 14px rgba(0,0,0,0.85))'
+            : undefined,
+        clipPath:
+          clipSide === 'left'
+            ? 'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)'
+            : clipSide === 'right'
+            ? 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)'
+            : undefined,
+      }}
+    >
+      <svg
+        width="46"
+        height="82"
+        viewBox="0 0 46 82"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="overflow-visible"
+      >
+        <defs>
+          <clipPath id="bottleBodyClip">
+            <path d="M 15 16 C 15 14, 17 12, 19 12 L 27 12 C 29 12, 31 14, 31 16 L 33 26 C 36 29, 39 33, 39 38 L 39 68 C 39 74, 35 78, 29 78 L 17 78 C 11 78, 7 74, 7 68 L 7 38 C 7 33, 10 29, 13 26 Z" />
+          </clipPath>
+        </defs>
+
+        {/* Clear Glass Body Outline */}
+        <path
+          d="M 15 16 C 15 14, 17 12, 19 12 L 27 12 C 29 12, 31 14, 31 16 L 33 26 C 36 29, 39 33, 39 38 L 39 68 C 39 74, 35 78, 29 78 L 17 78 C 11 78, 7 74, 7 68 L 7 38 C 7 33, 10 29, 13 26 Z"
+          fill="rgba(255, 255, 255, 0.12)"
+          stroke="rgba(255, 255, 255, 0.55)"
+          strokeWidth="1.2"
+        />
+
+        {/* Colored Liquid (bottom ~75% of body) */}
+        <g clipPath="url(#bottleBodyClip)">
+          <rect x="0" y="28" width="46" height="54" fill={liquidColor} />
+          {/* Surface liquid shimmer */}
+          <ellipse cx="23" cy="28" rx="14" ry="2.5" fill="rgba(255,255,255,0.3)" />
+        </g>
+
+        {/* Crack lines on expired bottle */}
+        {type === 'expired' && (
+          <g stroke="#1F1F1F" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M 12 34 L 20 44 L 14 56 M 34 46 L 24 60 L 30 72" />
+          </g>
+        )}
+
+        {/* Label Badge */}
+        <g>
+          <circle cx="23" cy="48" r="11" fill={labelBg} stroke="rgba(255,255,255,0.6)" strokeWidth="1" />
+          <text
+            x="23"
+            y={type === 'gold' ? '52' : '53'}
+            fill={labelTextColor}
+            fontSize={type === 'gold' ? '12' : '13'}
+            fontWeight="900"
+            fontFamily="Arial, sans-serif"
+            textAnchor="middle"
+          >
+            {labelText}
+          </text>
+        </g>
+
+        {/* Left Side Glass Highlight / Reflection */}
+        <rect
+          x="10"
+          y="26"
+          width="3"
+          height="44"
+          rx="1.5"
+          fill="white"
+          fillOpacity="0.28"
+          pointerEvents="none"
+        />
+
+        {/* Neck & Cap */}
+        <rect x="19" y="8" width="8" height="6" fill="rgba(255,255,255,0.3)" stroke="rgba(255,255,255,0.5)" />
+        <rect x="17" y="3" width="12" height="6" rx="2" fill={capColor} stroke="rgba(0,0,0,0.15)" strokeWidth="0.8" />
+      </svg>
+    </div>
+  );
 }
 
 export default function SipSlicePage() {
   const router = useRouter();
-  const [balance, setBalance] = useState<number>(0);
-  const [gameState, setGameState] = useState<'intro' | 'playing' | 'already_played' | 'game_over'>('intro');
 
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [bottles, setBottles] = useState<BottleSpawn[]>([]);
-  const [score, setScore] = useState<number>(0);
-  const [coinsWon, setCoinsWon] = useState<number>(0);
-  const [timeLeftMs, setTimeLeftMs] = useState<number>(30000);
-  const [hitExpired, setHitExpired] = useState<boolean>(false);
-  const [comboText, setComboText] = useState<string | null>(null);
+  // Screen & Orientation States
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [gameState, setGameState] = useState<GameState>('loading');
+  const [countdownNum, setCountdownNum] = useState<number | string>(3);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [score, setScore] = useState(0);
+  const [comboBanner, setComboBanner] = useState<{ count: number; id: number } | null>(null);
 
-  // Sliced state
-  const [slicedHalves, setSlicedHalves] = useState<SlicedHalf[]>([]);
-  const [droplets, setDroplets] = useState<JuiceDroplet[]>([]);
-  const [scorePops, setScorePops] = useState<ScorePop[]>([]);
-  const [screenFlashRed, setScreenFlashRed] = useState<boolean>(false);
-  const [expiredBanner, setExpiredBanner] = useState<boolean>(false);
+  // Results State
+  const [resultData, setResultData] = useState<{
+    coinsWon: number;
+    bottlesSliced: number;
+    totalBottles: number;
+    hitExpired: boolean;
+    newBalance: number;
+  }>({
+    coinsWon: 0,
+    bottlesSliced: 0,
+    totalBottles: 22,
+    hitExpired: false,
+    newBalance: 0,
+  });
 
-  // Today score for already played view
-  const [todayResult, setTodayResult] = useState<{ sliced: number; total: number; coins: number } | null>(null);
-  const [cooldownText, setCooldownText] = useState<string>('');
+  const [alreadyPlayedData, setAlreadyPlayedData] = useState<{
+    bottlesSliced: number;
+    totalBottles: number;
+    coinsWon: number;
+    nextAvailable: string;
+  } | null>(null);
 
-  // Refs for requestAnimationFrame physics and swipe canvas
-  const gameAreaRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const gameStartTimeRef = useRef<number>(0);
-  const isPlayingRef = useRef<boolean>(false);
-  const slicedIndicesRef = useRef<Set<number>>(new Set());
-  const activePositionsRef = useRef<Map<number, ActiveBottlePhysics>>(new Map());
+  const [midnightCountdown, setMidnightCountdown] = useState('00:00:00');
 
-  // Swipe trail tracking
-  const isSwipingRef = useRef<boolean>(false);
-  const swipePointsRef = useRef<{ x: number; y: number; time: number }[]>([]);
-  const swipeSlicedCountRef = useRef<number>(0);
-  const dimensionsRef = useRef<{ width: number; height: number }>({ width: 390, height: 750 });
+  // DOM Refs
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Update cooldown countdown
+  // Game Engine Refs
+  const gameIdRef = useRef<string | null>(null);
+  const bottleSpawnsRef = useRef<BottleSpawn[]>([]);
+  const activeBottlesRef = useRef<ActiveBottle[]>([]);
+  const bottleHalvesRef = useRef<BottleHalf[]>([]);
+  const juiceDropletsRef = useRef<JuiceDroplet[]>([]);
+  const juiceSplatsRef = useRef<JuiceSplat[]>([]);
+  const scorePopsRef = useRef<ScorePop[]>([]);
+  const slicedIndicesRef = useRef<number[]>([]);
+  const hitExpiredRef = useRef(false);
+
+  // Input & Blade Trail Refs
+  const isPointerDownRef = useRef(false);
+  const trailPointsRef = useRef<TrailPoint[]>([]);
+  const lastSwooshTimeRef = useRef(0);
+  const currentSwipeSlicedCountRef = useRef(0);
+  const lastSliceTimeRef = useRef(0);
+
+  // Time & Physics Refs
+  const gameStartTimeRef = useRef(0);
+  const pausedTimeElapsedRef = useRef(0);
+  const pauseStartRef = useRef(0);
+  const animationFrameIdRef = useRef<number | null>(null);
+  const lastFrameTimeRef = useRef(0);
+
+  // Re-render triggers for visual elements
+  const [, setVisualTick] = useState(0);
+
+  // -------------------------------------------------------------
+  // 1. ORIENTATION & RESIZE HANDLING
+  // -------------------------------------------------------------
   useEffect(() => {
-    function updateCountdown() {
-      const now = new Date();
-      const istOffsetMs = 5.5 * 60 * 60 * 1000;
-      const istNow = new Date(now.getTime() + istOffsetMs);
-      const istNextMidnightUTC = new Date(
-        Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() + 1, 0, 0, 0)
-      );
-      const diff = Math.max(0, istNextMidnightUTC.getTime() - istOffsetMs - now.getTime());
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      setCooldownText(`${h}h ${m}m`);
+    const checkOrientation = () => {
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+    };
+
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    // Try orientation lock if supported
+    if (typeof screen !== 'undefined' && 'orientation' in screen && 'lock' in screen.orientation) {
+      try {
+        (screen.orientation as { lock: (mode: string) => Promise<void> })
+          .lock('landscape')
+          .catch(() => {});
+      } catch {}
     }
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Update canvas size on resize
-  useEffect(() => {
-    const updateSize = () => {
-      if (gameAreaRef.current && canvasRef.current) {
-        const rect = gameAreaRef.current.getBoundingClientRect();
-        dimensionsRef.current = { width: rect.width, height: rect.height };
-        canvasRef.current.width = rect.width;
-        canvasRef.current.height = rect.height;
-      }
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
     };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Init auth check & balance
+  // -------------------------------------------------------------
+  // 2. LOCK BODY SCROLL DURING GAMEPLAY
+  // -------------------------------------------------------------
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    const originalPosition = document.body.style.position;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+      document.body.style.position = originalPosition;
+      document.body.style.width = '';
+      document.body.style.height = '';
+    };
+  }, []);
+
+  // -------------------------------------------------------------
+  // 3. MIDNIGHT IST COUNTDOWN FORMATTER
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      // IST offset: UTC+5:30
+      const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+      const istTime = new Date(utcTime + 5.5 * 3600000);
+
+      const nextMidnightIst = new Date(istTime);
+      nextMidnightIst.setHours(24, 0, 0, 0);
+
+      const diffMs = nextMidnightIst.getTime() - istTime.getTime();
+      if (diffMs <= 0) {
+        setMidnightCountdown('00:00:00');
+        return;
+      }
+
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      const seconds = Math.floor((diffMs % 60000) / 1000);
+
+      setMidnightCountdown(
+        `${hours.toString().padStart(2, '0')}:${minutes
+          .toString()
+          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // -------------------------------------------------------------
+  // 4. CHECK USER AUTH & DAILY PLAY STATUS
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const initCheck = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         router.push('/');
         return;
       }
-      fetch('/api/balance')
-        .then((res) => res.json())
-        .then((d) => {
-          if (d.balance !== undefined) setBalance(d.balance);
-        })
-        .catch(() => {});
-    });
+
+      setGameState('start');
+    };
+
+    initCheck();
   }, [router]);
 
-  // End Game handler
-  const handleEndGame = useCallback(
-    async (isExpiredHit = false) => {
-      if (!isPlayingRef.current) return;
-      isPlayingRef.current = false;
+  // -------------------------------------------------------------
+  // 5. CANVAS RESIZING
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      const elapsedMs = Date.now() - gameStartTimeRef.current;
-      const slicedArray = Array.from(slicedIndicesRef.current);
+    const updateCanvasSize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
 
-      if (isExpiredHit) {
-        setHitExpired(true);
-        setScreenFlashRed(true);
-        setExpiredBanner(true);
-        playExpiredHit();
-        setTimeout(() => setScreenFlashRed(false), 250);
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    return () => window.removeEventListener('resize', updateCanvasSize);
+  }, [gameState]);
+
+  // -------------------------------------------------------------
+  // 6. START GAME SESSION (API CALL & COUNTDOWN)
+  // -------------------------------------------------------------
+  const handleStartGame = async () => {
+    initAudioContext();
+    setGameState('loading');
+
+    try {
+      const res = await fetch('/api/games/sip-slice/start', {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (res.status === 409 || data.already_played) {
+        setAlreadyPlayedData({
+          bottlesSliced: data.today_result?.bottles_sliced ?? data.bottles_sliced ?? 0,
+          totalBottles: data.today_result?.total_bottles ?? data.total_bottles ?? 22,
+          coinsWon: data.today_result?.coins_won ?? data.coins_won ?? 0,
+          nextAvailable: data.next_available || '',
+        });
+        setGameState('already_played');
+        return;
       }
+
+      if (!res.ok || !data.game_id) {
+        setGameState('start');
+        return;
+      }
+
+      gameIdRef.current = data.game_id;
+      bottleSpawnsRef.current = data.bottles || [];
+      activeBottlesRef.current = [];
+      bottleHalvesRef.current = [];
+      juiceDropletsRef.current = [];
+      juiceSplatsRef.current = [];
+      scorePopsRef.current = [];
+      slicedIndicesRef.current = [];
+      hitExpiredRef.current = false;
+      setScore(0);
+      setTimeLeft(30);
+
+      // Start 3-2-1 Countdown
+      setGameState('countdown');
+      setCountdownNum(3);
+      playBladeSwoosh();
+
+      setTimeout(() => {
+        setCountdownNum(2);
+        playBladeSwoosh();
+      }, 700);
+
+      setTimeout(() => {
+        setCountdownNum(1);
+        playBladeSwoosh();
+      }, 1400);
+
+      setTimeout(() => {
+        setCountdownNum('SLICE!');
+        playSliceHit();
+      }, 2100);
+
+      setTimeout(() => {
+        startActiveGameplay();
+      }, 2600);
+    } catch {
+      setGameState('start');
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 7. START ACTIVE GAMEPLAY
+  // -------------------------------------------------------------
+  const startActiveGameplay = () => {
+    setGameState('playing');
+    const now = performance.now();
+    gameStartTimeRef.current = now;
+    pausedTimeElapsedRef.current = 0;
+    lastFrameTimeRef.current = now;
+
+    // Convert spawned data into active bottles physics metadata
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    activeBottlesRef.current = bottleSpawnsRef.current.map((sp) => {
+      const startX = (sp.start_x_percent / 100) * width;
+      const startY = height + 90; // Start off-screen at bottom
+      const peakY = (sp.peak_height_percent / 100) * height; // 30% to 70% from top
+      const flightDuration = 2.2; // ~2.2s flight
+      const tPeak = flightDuration / 2;
+
+      // Physics: peakY = startY - 0.5 * gravity * tPeak^2
+      // gravity = 2 * (startY - peakY) / (tPeak^2)
+      const gravity = (2 * (startY - peakY)) / (tPeak * tPeak);
+      const vy0 = -gravity * tPeak;
+      const vx = (sp.velocity_x / 100) * width; // horizontal drift
+
+      return {
+        index: sp.index,
+        type: sp.type,
+        appearAtMs: sp.appear_at_ms,
+        startX,
+        startY,
+        peakY,
+        vx,
+        vy0,
+        gravity,
+        rotSpeed: sp.rotation_speed,
+        initialRot: (Math.random() - 0.5) * 40,
+        flightDuration,
+        x: startX,
+        y: startY,
+        rotation: 0,
+        isSliced: false,
+        isRemoved: false,
+      };
+    });
+  };
+
+  // -------------------------------------------------------------
+  // 8. COMPLETE GAME (FINISH OR EXPIRED HIT)
+  // -------------------------------------------------------------
+  const completeGame = useCallback(
+    async (isExpired: boolean) => {
+      if (gameState === 'result') return;
+
+      const gameId = gameIdRef.current;
+      const sliced = [...slicedIndicesRef.current];
 
       try {
         const res = await fetch('/api/games/sip-slice/complete', {
@@ -271,775 +566,1078 @@ export default function SipSlicePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             game_id: gameId,
-            sliced_indices: slicedArray,
-            hit_expired: isExpiredHit,
-            ended_at_ms: elapsedMs,
+            sliced_indices: sliced,
+            hit_expired: isExpired,
+            ended_at_ms: Math.round(performance.now() - gameStartTimeRef.current),
           }),
         });
 
         const data = await res.json();
-        const won = data.coins_won || (isExpiredHit ? 1 : Math.max(1, score));
-        setCoinsWon(won);
-        setBalance((b) => b + won);
-
-        setTimeout(
-          () => {
-            playGameCompleteSound();
-            setGameState('game_over');
-          },
-          isExpiredHit ? 1100 : 400
-        );
+        setResultData({
+          coinsWon: data.coins_won ?? Math.max(1, score),
+          bottlesSliced: data.bottles_sliced ?? sliced.length,
+          totalBottles: data.total_bottles ?? bottleSpawnsRef.current.length ?? 22,
+          hitExpired: isExpired,
+          newBalance: data.new_balance ?? 0,
+        });
       } catch {
-        setCoinsWon(1);
-        setTimeout(
-          () => {
-            playGameCompleteSound();
-            setGameState('game_over');
-          },
-          isExpiredHit ? 1100 : 400
-        );
+        setResultData({
+          coinsWon: Math.max(1, score),
+          bottlesSliced: sliced.length,
+          totalBottles: bottleSpawnsRef.current.length || 22,
+          hitExpired: isExpired,
+          newBalance: 0,
+        });
       }
+
+      setGameState('result');
     },
-    [gameId, score]
+    [gameState, score]
   );
 
-  // Start the 30s game round
-  const handleStartGame = async () => {
-    try {
-      const res = await fetch('/api/games/sip-slice/start', { method: 'POST' });
-      if (res.status === 409) {
-        const data = await res.json();
-        setTodayResult({
-          sliced: data.bottles_sliced || 0,
-          total: data.total_bottles || 20,
-          coins: data.coins_won || 0,
-        });
-        setGameState('already_played');
-        return;
-      }
-      if (!res.ok) {
-        router.push('/play');
-        return;
-      }
-
-      const data = await res.json();
-      setGameId(data.game_id);
-      setBottles(data.bottles);
-      setScore(0);
-      setTimeLeftMs(30000);
-      setHitExpired(false);
-      setExpiredBanner(false);
-      setSlicedHalves([]);
-      setDroplets([]);
-      setScorePops([]);
-      slicedIndicesRef.current = new Set();
-      activePositionsRef.current.clear();
-
-      isPlayingRef.current = true;
-      gameStartTimeRef.current = Date.now();
-      setGameState('playing');
-    } catch {
-      router.push('/play');
-    }
-  };
-
-  // Slice Bottle Action
+  // -------------------------------------------------------------
+  // 9. SLICE LOGIC & VISUAL GENERATION
+  // -------------------------------------------------------------
   const sliceBottle = useCallback(
-    (bottle: ActiveBottlePhysics, angleDeg: number) => {
-      if (!isPlayingRef.current) return;
-      if (slicedIndicesRef.current.has(bottle.index)) return;
+    (bottle: ActiveBottle, sliceX: number, sliceY: number, angleRad: number) => {
+      bottle.isSliced = true;
+      slicedIndicesRef.current.push(bottle.index);
 
-      slicedIndicesRef.current.add(bottle.index);
-      swipeSlicedCountRef.current += 1;
+      // Score points
+      let points = 1;
+      let scoreColor = '#FFFFFF';
+      let fontSize = 28;
 
-      // Slice sounds
-      playSliceShing();
-      playJuiceSplat();
-      if (bottle.type === 'gold') playGoldPling();
-
-      // Combo check
-      if (swipeSlicedCountRef.current >= 2) {
-        setComboText(`COMBO x${swipeSlicedCountRef.current}!`);
-        setTimeout(() => setComboText(null), 700);
+      if (bottle.type === 'gold') {
+        points = 3;
+        scoreColor = '#FFC93C';
+        fontSize = 34;
+      } else if (bottle.type === 'expired') {
+        points = -3;
+        scoreColor = '#B92429';
       }
 
-      // Add score
-      let delta = 1;
-      if (bottle.type === 'gold') delta = 3;
-      else if (bottle.type === 'expired') delta = -3;
-      setScore((s) => Math.max(0, s + delta));
+      setScore((prev) => Math.max(0, prev + points));
 
-      // Sliced Halves
-      const halfId = Date.now() + Math.random();
-      setSlicedHalves((prev) => [
-        ...prev,
-        {
-          id: halfId,
-          type: bottle.type,
-          x: bottle.x,
-          y: bottle.y,
-          angle: angleDeg,
-        },
-      ]);
-      setTimeout(() => {
-        setSlicedHalves((prev) => prev.filter((h) => h.id !== halfId));
-      }, 500);
+      // Pop-up text
+      scorePopsRef.current.push({
+        id: `pop_${bottle.index}_${Date.now()}`,
+        x: sliceX,
+        y: sliceY,
+        text: points > 0 ? `+${points}` : `${points}`,
+        color: scoreColor,
+        fontSize,
+        createdAt: performance.now(),
+      });
 
-      // Juice Splash Droplets
-      let dropletColor = '#CDEE1C';
-      if (bottle.type === 'pineapple') dropletColor = '#FFE14D';
-      else if (bottle.type === 'gold') dropletColor = '#FFC93C';
-      else if (bottle.type === 'expired') dropletColor = '#555555';
+      // Sound Effects & Expired Logic
+      if (bottle.type === 'expired') {
+        hitExpiredRef.current = true;
+        playExpiredThud();
 
-      const newDroplets: JuiceDroplet[] = [];
-      const dropletCount = 10;
-      for (let i = 0; i < dropletCount; i++) {
-        const rad = Math.random() * Math.PI * 2;
-        const speed = 25 + Math.random() * 55;
-        newDroplets.push({
-          id: Date.now() + Math.random() + i,
-          x: bottle.x + 25,
-          y: bottle.y + 45,
-          dx: Math.cos(rad) * speed,
-          dy: Math.sin(rad) * speed + 20, // gravity drift
-          size: 4 + Math.floor(Math.random() * 5),
-          color: dropletColor,
+        // Expired Sequence: freeze bottles, flash red, show EXPIRED! text, 1s pause
+        setGameState('expired_hit');
+        setTimeout(() => {
+          completeGame(true);
+        }, 1100);
+      } else if (bottle.type === 'gold') {
+        playSliceHit();
+        playJuiceSplash();
+        playGoldBonus();
+      } else {
+        playSliceHit();
+        playJuiceSplash();
+      }
+
+      // Combo Tracking
+      const now = performance.now();
+      if (now - lastSliceTimeRef.current < 250) {
+        currentSwipeSlicedCountRef.current += 1;
+      } else {
+        currentSwipeSlicedCountRef.current = 1;
+      }
+      lastSliceTimeRef.current = now;
+
+      if (currentSwipeSlicedCountRef.current >= 2) {
+        playComboChime();
+        setComboBanner({
+          count: currentSwipeSlicedCountRef.current,
+          id: Date.now(),
         });
       }
-      setDroplets((prev) => [...prev, ...newDroplets]);
-      setTimeout(() => {
-        setDroplets((prev) => prev.filter((d) => !newDroplets.some((nd) => nd.id === d.id)));
-      }, 400);
 
-      // Score Pop
-      const popText = delta > 0 ? `+${delta}` : `${delta}`;
-      const popId = Date.now() + Math.random();
-      setScorePops((prev) => [
-        ...prev,
-        {
-          id: popId,
-          text: popText,
-          x: bottle.x + 25,
-          y: bottle.y + 45,
-        },
-      ]);
-      setTimeout(() => {
-        setScorePops((prev) => prev.filter((p) => p.id !== popId));
-      }, 500);
+      // Slice Visuals:
+      // A. Bottle Halves
+      const cutAngleDeg = (angleRad * 180) / Math.PI;
+      bottleHalvesRef.current.push({
+        id: `half_l_${bottle.index}_${Date.now()}`,
+        type: bottle.type,
+        x: bottle.x,
+        y: bottle.y,
+        side: 'left',
+        sliceAngle: cutAngleDeg,
+        vx: -130 - Math.random() * 40,
+        vy: -80 - Math.random() * 60,
+        rot: bottle.rotation,
+        rotSpeed: -200 - Math.random() * 100,
+        createdAt: performance.now(),
+      });
 
-      // Expired bottle ends game immediately!
-      if (bottle.type === 'expired') {
-        handleEndGame(true);
+      bottleHalvesRef.current.push({
+        id: `half_r_${bottle.index}_${Date.now()}`,
+        type: bottle.type,
+        x: bottle.x,
+        y: bottle.y,
+        side: 'right',
+        sliceAngle: cutAngleDeg,
+        vx: 130 + Math.random() * 40,
+        vy: -80 - Math.random() * 60,
+        rot: bottle.rotation,
+        rotSpeed: 200 + Math.random() * 100,
+        createdAt: performance.now(),
+      });
+
+      // B. Juice Splat on Board
+      const splatColor =
+        bottle.type === 'mango'
+          ? 'rgba(205, 238, 28, 0.75)'
+          : bottle.type === 'pineapple'
+          ? 'rgba(255, 225, 77, 0.75)'
+          : bottle.type === 'gold'
+          ? 'rgba(255, 201, 60, 0.85)'
+          : 'rgba(50, 42, 38, 0.85)';
+
+      const r1 = 35 + Math.floor(Math.random() * 30);
+      const r2 = 35 + Math.floor(Math.random() * 30);
+      const r3 = 35 + Math.floor(Math.random() * 30);
+      const r4 = 35 + Math.floor(Math.random() * 30);
+      const r5 = 35 + Math.floor(Math.random() * 30);
+      const r6 = 35 + Math.floor(Math.random() * 30);
+      const r7 = 35 + Math.floor(Math.random() * 30);
+      const r8 = 35 + Math.floor(Math.random() * 30);
+
+      juiceSplatsRef.current.push({
+        id: `splat_${bottle.index}_${Date.now()}`,
+        x: sliceX,
+        y: sliceY,
+        size: 75 + Math.random() * 35,
+        color: splatColor,
+        borderRadius: `${r1}% ${r2}% ${r3}% ${r4}% / ${r5}% ${r6}% ${r7}% ${r8}%`,
+        rotation: Math.random() * 360,
+        createdAt: performance.now(),
+      });
+
+      // C. Juice Droplets (14-18 droplets with 3D spherical radial gradient)
+      const dropletCount = 14 + Math.floor(Math.random() * 5);
+      const baseColor =
+        bottle.type === 'mango'
+          ? '#CDEE1C'
+          : bottle.type === 'pineapple'
+          ? '#FFE14D'
+          : bottle.type === 'gold'
+          ? '#FFC93C'
+          : '#4A3E39';
+      const lightColor =
+        bottle.type === 'mango'
+          ? '#E9FFA8'
+          : bottle.type === 'pineapple'
+          ? '#FFF4B8'
+          : bottle.type === 'gold'
+          ? '#FFF4AA'
+          : '#887B75';
+      const darkColor =
+        bottle.type === 'mango'
+          ? '#8FC31F'
+          : bottle.type === 'pineapple'
+          ? '#E5A500'
+          : bottle.type === 'gold'
+          ? '#C48800'
+          : '#261F1B';
+
+      for (let i = 0; i < dropletCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 160 + Math.random() * 260;
+        juiceDropletsRef.current.push({
+          id: `drop_${bottle.index}_${i}_${Date.now()}`,
+          x: sliceX,
+          y: sliceY,
+          size: 5 + Math.random() * 6,
+          color: baseColor,
+          lightColor,
+          darkColor,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 60,
+          createdAt: performance.now(),
+        });
       }
     },
-    [handleEndGame]
+    [completeGame]
   );
 
-  // Swipe Hit Detection on Move
-  const processSwipeSegment = useCallback(
-    (x1: number, y1: number, x2: number, y2: number) => {
-      if (!isPlayingRef.current) return;
+  // -------------------------------------------------------------
+  // 10. HIT DETECTION ON POINTER MOVE (Circle-Line Intersection)
+  // -------------------------------------------------------------
+  const handlePointerMovement = useCallback(
+    (clientX: number, clientY: number) => {
+      if (gameState !== 'playing') return;
 
-      const angleDeg = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+      const now = performance.now();
+      trailPointsRef.current.push({ x: clientX, y: clientY, time: now });
 
-      activePositionsRef.current.forEach((bottle) => {
-        if (!bottle.isAlive || slicedIndicesRef.current.has(bottle.index)) return;
+      // Throttle blade swoosh sound on swipes
+      if (now - lastSwooshTimeRef.current > 130) {
+        playBladeSwoosh();
+        lastSwooshTimeRef.current = now;
+      }
 
-        // Bottle center is ~25px from left, 45px from top
-        const cx = bottle.x + 25;
-        const cy = bottle.y + 45;
-        const dist = distToSegment(cx, cy, x1, y1, x2, y2);
+      const points = trailPointsRef.current;
+      if (points.length < 2) return;
 
-        // Responsive hit radius
-        if (dist <= 36) {
-          sliceBottle(bottle, angleDeg);
+      const p1 = points[points.length - 2];
+      const p2 = points[points.length - 1];
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const segLenSq = dx * dx + dy * dy;
+      if (segLenSq === 0) return;
+
+      const sliceAngleRad = Math.atan2(dy, dx);
+      const hitRadius = 32; // ~70% of 46px/82px bottle
+
+      // Check all active unsliced bottles
+      for (const bottle of activeBottlesRef.current) {
+        if (bottle.isSliced || bottle.isRemoved) continue;
+
+        // Bottle center
+        const bx = bottle.x + 23;
+        const by = bottle.y + 41;
+
+        // Project bottle center onto line segment p1 -> p2
+        const t = Math.max(0, Math.min(1, ((bx - p1.x) * dx + (by - p1.y) * dy) / segLenSq));
+        const projX = p1.x + t * dx;
+        const projY = p1.y + t * dy;
+
+        const distSq = (bx - projX) * (bx - projX) + (by - projY) * (by - projY);
+
+        if (distSq <= hitRadius * hitRadius) {
+          sliceBottle(bottle, projX, projY, sliceAngleRad);
         }
-      });
+      }
     },
-    [sliceBottle]
+    [gameState, sliceBottle]
   );
 
-  // Touch / Mouse event handlers
-  const handlePointerDown = (clientX: number, clientY: number) => {
-    if (!gameAreaRef.current) return;
-    const rect = gameAreaRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    isSwipingRef.current = true;
-    swipeSlicedCountRef.current = 0;
-    swipePointsRef.current = [{ x, y, time: Date.now() }];
-  };
-
-  const handlePointerMove = (clientX: number, clientY: number) => {
-    if (!isSwipingRef.current || !gameAreaRef.current) return;
-    const rect = gameAreaRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    const points = swipePointsRef.current;
-    if (points.length > 0) {
-      const lastPoint = points[points.length - 1];
-      processSwipeSegment(lastPoint.x, lastPoint.y, x, y);
-    }
-
-    points.push({ x, y, time: Date.now() });
-  };
-
-  const handlePointerUp = () => {
-    isSwipingRef.current = false;
-  };
-
-  // requestAnimationFrame Loop for Physics & Trail
+  // -------------------------------------------------------------
+  // 11. MAIN RAF GAME LOOP (PHYSICS, CANVAS BLADE, DOM PARTICLES)
+  // -------------------------------------------------------------
   useEffect(() => {
-    if (gameState !== 'playing') {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (gameState !== 'playing' && gameState !== 'expired_hit' && gameState !== 'times_up') {
       return;
     }
 
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
 
-    const updatePhysicsAndRender = () => {
-      if (!isPlayingRef.current) return;
+    const updateLoop = (frameTime: number) => {
+      const dt = Math.min((frameTime - lastFrameTimeRef.current) / 1000, 0.05);
+      lastFrameTimeRef.current = frameTime;
 
-      const now = Date.now();
-      const elapsed = now - gameStartTimeRef.current;
-      const remaining = Math.max(0, 30000 - elapsed);
-      setTimeLeftMs(remaining);
+      const gameElapsed = frameTime - gameStartTimeRef.current - pausedTimeElapsedRef.current;
 
-      if (remaining <= 0) {
-        handleEndGame(false);
-        return;
+      // 1. Update Game Timer
+      if (gameState === 'playing') {
+        const remaining = Math.max(0, 30 - gameElapsed / 1000);
+        setTimeLeft(Math.ceil(remaining));
+
+        if (remaining <= 0) {
+          setGameState('times_up');
+          setTimeout(() => {
+            completeGame(false);
+          }, 1100);
+        }
       }
 
-      const { width, height } = dimensionsRef.current;
-      const startY = height + 60; // below screen
+      // 2. Update Active Bottles Physics
+      if (gameState === 'playing') {
+        const screenHeight = window.innerHeight;
+        activeBottlesRef.current.forEach((b) => {
+          if (b.isSliced || b.isRemoved) return;
 
-      // 1. Calculate parabolic position for each bottle
-      bottles.forEach((b) => {
-        if (slicedIndicesRef.current.has(b.index)) {
-          activePositionsRef.current.delete(b.index);
-          return;
-        }
+          const bottleElapsed = (gameElapsed - b.appearAtMs) / 1000;
+          if (bottleElapsed < 0) {
+            // Not appeared yet
+            b.y = screenHeight + 100;
+            return;
+          }
 
-        const tElapsed = elapsed - b.appear_at_ms;
-        if (tElapsed < 0 || tElapsed > b.flight_duration_ms) {
-          activePositionsRef.current.delete(b.index);
-          return;
-        }
+          if (bottleElapsed > b.flightDuration) {
+            // Fallen off bottom of screen
+            b.isRemoved = true;
+            return;
+          }
 
-        const t = tElapsed / 1000;
-        const T = b.flight_duration_ms / 1000;
-        const tPeak = T / 2;
-        const peakY = height * b.peak_height_percent;
-        const deltaH = startY - peakY;
-        const g = (2 * deltaH) / (tPeak * tPeak);
-        const vy0 = -g * tPeak;
-
-        // Kinematics: y = y0 + vy0*t + 0.5*g*t^2
-        const y = startY + vy0 * t + 0.5 * g * t * t;
-        const startX = width * b.start_x_percent;
-        const x = startX + b.drift_x * (t / T);
-        const rotation = b.initial_rotation + b.rotation_speed * t;
-
-        activePositionsRef.current.set(b.index, {
-          index: b.index,
-          type: b.type,
-          x,
-          y,
-          rotation,
-          isAlive: true,
+          // Parabolic trajectory: y = startY + vy0 * t + 0.5 * gravity * t^2
+          b.x = b.startX + b.vx * bottleElapsed;
+          b.y = b.startY + b.vy0 * bottleElapsed + 0.5 * b.gravity * bottleElapsed * bottleElapsed;
+          b.rotation = b.initialRot + b.rotSpeed * bottleElapsed;
         });
+      }
+
+      // 3. Update Bottle Halves
+      bottleHalvesRef.current = bottleHalvesRef.current.filter((half) => {
+        const age = (frameTime - half.createdAt) / 1000;
+        if (age > 0.65) return false;
+
+        half.x += half.vx * dt;
+        half.y += half.vy * dt + 0.5 * 1100 * dt * dt;
+        half.vy += 1100 * dt; // Gravity
+        half.rot += half.rotSpeed * dt;
+        return true;
       });
 
-      // 2. Draw swipe trail on Canvas
+      // 4. Update Juice Droplets
+      juiceDropletsRef.current = juiceDropletsRef.current.filter((d) => {
+        const age = (frameTime - d.createdAt) / 1000;
+        if (age > 0.55) return false;
+
+        d.x += d.vx * dt;
+        d.y += d.vy * dt + 0.5 * 800 * dt * dt;
+        d.vy += 800 * dt;
+        return true;
+      });
+
+      // 5. Clean up old splats (keep for 3.5s then fade)
+      juiceSplatsRef.current = juiceSplatsRef.current.filter((s) => {
+        return frameTime - s.createdAt < 4000;
+      });
+
+      // 6. Clean up score popups (fade after 550ms)
+      scorePopsRef.current = scorePopsRef.current.filter((p) => {
+        return frameTime - p.createdAt < 550;
+      });
+
+      // 7. Draw Canvas Blade Trail (Smooth Tapered Quadratic Curve)
       if (ctx && canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Keep points newer than 200ms
-        const recentPoints = swipePointsRef.current.filter((p) => now - p.time < 200);
-        swipePointsRef.current = recentPoints;
+        // Filter out points older than 180ms
+        const activeTrail = trailPointsRef.current.filter(
+          (p) => frameTime - p.time < 180
+        );
+        trailPointsRef.current = activeTrail;
 
-        if (recentPoints.length >= 2) {
-          ctx.beginPath();
-          ctx.moveTo(recentPoints[0].x, recentPoints[0].y);
-          for (let i = 1; i < recentPoints.length; i++) {
-            ctx.lineTo(recentPoints[i].x, recentPoints[i].y);
-          }
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 3.5;
+        if (activeTrail.length >= 2) {
+          ctx.save();
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-          ctx.shadowBlur = 8;
-          ctx.stroke();
-          ctx.shadowBlur = 0;
+
+          // Draw segmented tapered blade with glowing core
+          for (let i = 0; i < activeTrail.length - 1; i++) {
+            const progress = i / (activeTrail.length - 1); // 0 (tail) to 1 (finger)
+            const pCurrent = activeTrail[i];
+            const pNext = activeTrail[i + 1];
+
+            ctx.beginPath();
+            ctx.moveTo(pCurrent.x, pCurrent.y);
+            ctx.lineTo(pNext.x, pNext.y);
+
+            // Width: 1px at tail -> 8.5px at finger tip
+            ctx.lineWidth = 1 + progress * 7.5;
+
+            // White core with blue-white neon glow
+            ctx.shadowColor = 'rgba(195, 225, 255, 0.9)';
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 + progress * 0.75})`;
+            ctx.stroke();
+          }
+
+          // Tip glow flare
+          const tip = activeTrail[activeTrail.length - 1];
+          ctx.beginPath();
+          ctx.arc(tip.x, tip.y, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.shadowColor = 'rgba(215, 235, 255, 1)';
+          ctx.shadowBlur = 12;
+          ctx.fill();
+
+          ctx.restore();
         }
       }
 
-      // Force render frame
-      animFrameRef.current = requestAnimationFrame(updatePhysicsAndRender);
+      setVisualTick(frameTime);
+      animationFrameIdRef.current = requestAnimationFrame(updateLoop);
     };
 
-    animFrameRef.current = requestAnimationFrame(updatePhysicsAndRender);
+    animationFrameIdRef.current = requestAnimationFrame(updateLoop);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
     };
-  }, [gameState, bottles, handleEndGame]);
+  }, [gameState, completeGame]);
 
-  return (
-    <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429] text-white flex flex-col justify-between select-none relative overflow-hidden shadow-2xl">
-      <style jsx global>{`
-        @keyframes splitLeft {
-          0% {
-            transform: translate(0, 0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(-45px, 75px) rotate(-35deg);
-            opacity: 0;
-          }
-        }
-        @keyframes splitRight {
-          0% {
-            transform: translate(0, 0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(45px, 75px) rotate(35deg);
-            opacity: 0;
-          }
-        }
-        @keyframes dropletFly {
-          0% {
-            transform: translate(0, 0) scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(var(--dx), var(--dy)) scale(0.3);
-            opacity: 0;
-          }
-        }
-        @keyframes scoreFloat {
-          0% {
-            transform: translate(-50%, -50%) translateY(0);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(-50%, -50%) translateY(-40px);
-            opacity: 0;
-          }
-        }
-        @keyframes coinBounce {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          65% {
-            transform: scale(1.2);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-      `}</style>
+  // -------------------------------------------------------------
+  // 12. TAB BACKGROUNDING & PAUSE HANDLING
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && gameState === 'playing') {
+        pauseStartRef.current = performance.now();
+        setGameState('paused');
+      }
+    };
 
-      {/* VIEW 1: INTRO SCREEN */}
-      {gameState === 'intro' && (
-        <div className="flex flex-col justify-between h-full min-h-[100dvh] w-full">
-          {/* Header */}
-          <div className="w-full">
-            <Header
-              variant="red"
-              rightElement={
-                <div className="bg-white/15 rounded-full px-3 py-1 flex items-center gap-1.5 shadow-sm border border-white/20">
-                  <CoinIcon size={18} />
-                  <span className="font-anton text-[14px] text-[#FFC93C]">{balance}</span>
-                </div>
-              }
-            />
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [gameState]);
 
-            {/* Back link & Title */}
-            <div className="px-5 pt-1">
-              <Link
-                href="/play"
-                className="inline-flex items-center gap-1.5 text-white/90 hover:text-white font-montserrat font-bold text-[13px] tracking-wide mb-2 transition-colors"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M15 19l-7-7 7-7" />
-                </svg>
-                BACK TO PLAY
-              </Link>
-              <h1 className="text-[38px] font-anton text-white leading-none uppercase tracking-wide">
-                SIP SLICE
-              </h1>
-              <p className="text-[14px] font-medium text-white/90 mt-1">
-                Slice the bottles! 1 play per day
-              </p>
-            </div>
-          </div>
+  const handlePause = () => {
+    if (gameState === 'playing') {
+      pauseStartRef.current = performance.now();
+      setGameState('paused');
+    }
+  };
 
-          {/* Hero Illustrated Area */}
-          <div className="my-auto flex flex-col items-center justify-center px-6 text-center">
-            <div className="relative mb-6">
-              <div className="flex items-center gap-3">
-                <div className="rotate-[-15deg] animate-bounce">
-                  <BottleSVG type="mango" />
-                </div>
-                <div className="rotate-[12deg] animate-pulse">
-                  <BottleSVG type="gold" />
-                </div>
-                <div className="rotate-[20deg] animate-bounce">
-                  <BottleSVG type="pineapple" />
-                </div>
-              </div>
-            </div>
+  const handleResume = () => {
+    if (gameState === 'paused') {
+      pausedTimeElapsedRef.current += performance.now() - pauseStartRef.current;
+      lastFrameTimeRef.current = performance.now();
+      setGameState('playing');
+    }
+  };
 
-            <div className="bg-[#7A1418] border border-white/20 rounded-[20px] p-5 w-full max-w-[320px] shadow-lg mb-4 text-left">
-              <span className="font-anton text-[16px] text-[#FFC93C] uppercase tracking-wide block mb-2">
-                HOW TO PLAY
-              </span>
-              <ul className="text-[13px] font-bold text-white/90 space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#CDEE1C]" />
-                  Swipe across bottles to slice (+1 coin)
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#FFC93C]" />
-                  Rare Gold bottles are worth +3 coins!
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#808080]" />
-                  DODGE Grey Expired bottles (-3 &amp; game over)
-                </li>
-              </ul>
-            </div>
+  // -------------------------------------------------------------
+  // 13. TOUCH & MOUSE INPUT BINDINGS ON CONTAINER
+  // -------------------------------------------------------------
+  const handleTouchStart = (e: React.TouchEvent) => {
+    initAudioContext();
+    isPointerDownRef.current = true;
+    currentSwipeSlicedCountRef.current = 0;
+    const touch = e.touches[0];
+    if (touch) {
+      trailPointsRef.current = [{ x: touch.clientX, y: touch.clientY, time: performance.now() }];
+    }
+  };
 
-            <button
-              type="button"
-              onClick={handleStartGame}
-              className="w-full max-w-[320px] h-[58px] bg-[#FFC93C] hover:bg-[#FFE14D] text-[#3D0B0E] font-anton text-[22px] uppercase rounded-[16px] shadow-xl transition-all cursor-pointer flex items-center justify-center tracking-wide"
-            >
-              START
-            </button>
-          </div>
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch) {
+      handlePointerMovement(touch.clientX, touch.clientY);
+    }
+  };
 
-          {/* Footer */}
-          <div className="px-5 pb-5 text-center text-[12px] font-bold text-white/70">
-            Zee Sip Fast Reflex Challenge · 30 Seconds
-          </div>
+  const handleTouchEnd = () => {
+    isPointerDownRef.current = false;
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    initAudioContext();
+    isPointerDownRef.current = true;
+    currentSwipeSlicedCountRef.current = 0;
+    trailPointsRef.current = [{ x: e.clientX, y: e.clientY, time: performance.now() }];
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isPointerDownRef.current) {
+      handlePointerMovement(e.clientX, e.clientY);
+    }
+  };
+
+  const handleMouseUp = () => {
+    isPointerDownRef.current = false;
+  };
+
+  // -------------------------------------------------------------
+  // 14. WOODEN CUTTING BOARD BACKGROUND COMPONENT
+  // -------------------------------------------------------------
+  const renderWoodenBoard = () => (
+    <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+      {/* 4 alternating vertical wood planks */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `repeating-linear-gradient(
+            to right,
+            #5C3A1E 0%, #5C3A1E 24.8%,
+            rgba(0,0,0,0.55) 24.8%, rgba(0,0,0,0.55) 25%,
+            #6B4226 25%, #6B4226 49.8%,
+            rgba(0,0,0,0.55) 49.8%, rgba(0,0,0,0.55) 50%,
+            #7A4A2E 50%, #7A4A2E 74.8%,
+            rgba(0,0,0,0.55) 74.8%, rgba(0,0,0,0.55) 75%,
+            #4A2E14 75%, #4A2E14 99.8%,
+            rgba(0,0,0,0.55) 99.8%, rgba(0,0,0,0.55) 100%
+          )`,
+        }}
+      />
+
+      {/* Subtle Wood Grain Overlay */}
+      <div
+        className="absolute inset-0 opacity-15"
+        style={{
+          background: `repeating-linear-gradient(
+            45deg,
+            rgba(0,0,0,0.12) 0px,
+            rgba(0,0,0,0.12) 2px,
+            transparent 2px,
+            transparent 8px
+          )`,
+        }}
+      />
+
+      {/* Edge Vignette */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.45) 80%, rgba(0,0,0,0.75) 100%)',
+        }}
+      />
+
+      {/* Decorative Pre-drawn Diagonal Slash Marks */}
+      <svg className="absolute inset-0 w-full h-full opacity-40 overflow-visible">
+        <line
+          x1="18%"
+          y1="22%"
+          x2="28%"
+          y2="38%"
+          stroke="#1E120A"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="68%"
+          y1="15%"
+          x2="82%"
+          y2="32%"
+          stroke="#1E120A"
+          strokeWidth="2"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="45%"
+          y1="55%"
+          x2="35%"
+          y2="72%"
+          stroke="#1E120A"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="82%"
+          y1="65%"
+          x2="92%"
+          y2="82%"
+          stroke="#1E120A"
+          strokeWidth="2"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="12%"
+          y1="68%"
+          x2="24%"
+          y2="84%"
+          stroke="#1E120A"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="50%"
+          y1="18%"
+          x2="62%"
+          y2="36%"
+          stroke="#1E120A"
+          strokeWidth="2"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+        <line
+          x1="30%"
+          y1="42%"
+          x2="44%"
+          y2="58%"
+          stroke="#1E120A"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
+        />
+      </svg>
+    </div>
+  );
+
+  // -------------------------------------------------------------
+  // RENDER: PORTRAIT ORIENTATION PROMPT OVERLAY
+  // -------------------------------------------------------------
+  if (isPortrait) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#2B170B] text-white p-6 text-center select-none">
+        {/* Animated Phone Rotate Icon */}
+        <div className="relative w-28 h-28 mb-6 flex items-center justify-center animate-bounce">
+          <svg
+            className="w-20 h-20 text-[#FFE14D] animate-spin"
+            style={{ animationDuration: '3s' }}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+            <line x1="12" y1="18" x2="12.01" y2="18" />
+          </svg>
         </div>
-      )}
 
-      {/* VIEW 2: FULL-SCREEN GAMEPLAY AREA */}
-      {gameState === 'playing' && (
+        <h2 className="text-3xl font-extrabold font-anton tracking-wide text-[#FFE14D] mb-3">
+          ROTATE TO LANDSCAPE
+        </h2>
+        <p className="text-gray-300 max-w-xs text-sm mb-6 leading-relaxed">
+          Sip Slice is built for landscape mode. Rotate your phone sideways to unlock the full Fruit
+          Ninja slicing action!
+        </p>
+
+        <div className="flex items-center gap-2 text-xs text-gray-400 bg-black/40 px-4 py-2 rounded-full">
+          <span>🔄</span> Turn device horizontally to continue
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // RENDER: ALREADY PLAYED TODAY SCREEN
+  // -------------------------------------------------------------
+  if (gameState === 'already_played' && alreadyPlayedData) {
+    return (
+      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center overflow-hidden select-none">
+        {renderWoodenBoard()}
+
+        <div className="relative z-10 bg-white/95 backdrop-blur-md rounded-[24px] p-7 max-w-sm w-full mx-4 text-center shadow-2xl border border-white/40">
+          <h2 className="text-2xl font-anton text-[#B92429] tracking-wide mb-1 uppercase">
+            TODAY&apos;S SLICE
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">You have already completed your daily slice!</p>
+
+          <div className="bg-[#FFF8F0] border border-[#FFE14D]/50 rounded-2xl p-4 mb-5">
+            <div className="text-sm font-semibold text-gray-700 mb-1">
+              Bottles Sliced: {alreadyPlayedData.bottlesSliced} / {alreadyPlayedData.totalBottles}
+            </div>
+            <div className="text-lg font-anton text-[#B92429] flex items-center justify-center gap-1.5">
+              <span>Earned +{alreadyPlayedData.coinsWon} Sip Coins</span>
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+              Next slice available in
+            </div>
+            <div className="text-2xl font-anton tracking-widest text-[#FFC93C] bg-black/80 py-2 rounded-xl">
+              {midnightCountdown}
+            </div>
+          </div>
+
+          <button
+            disabled
+            className="w-full bg-gray-300 text-gray-500 font-bold py-3.5 rounded-xl text-sm mb-3 cursor-not-allowed uppercase"
+          >
+            Come Back Tomorrow
+          </button>
+
+          <Link
+            href="/play"
+            className="inline-block text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+          >
+            ← Back to Games
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // RENDER: START SCREEN
+  // -------------------------------------------------------------
+  if (gameState === 'start' || gameState === 'loading') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center overflow-hidden select-none">
+        {renderWoodenBoard()}
+
+        <div className="relative z-10 flex flex-col items-center text-center p-6 max-w-md w-full">
+          {/* Title */}
+          <h1
+            className="text-5xl font-anton tracking-wider text-white mb-2"
+            style={{ textShadow: '0 4px 14px rgba(0,0,0,0.8)' }}
+          >
+            SIP SLICE
+          </h1>
+
+          {/* Zee Sip Logo */}
+          <div className="w-24 h-14 relative my-2 flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/zeesip-logo.png"
+              alt="Zee Sip"
+              className="max-h-full max-w-full object-contain drop-shadow-lg"
+            />
+          </div>
+
+          <p className="text-white/80 text-sm font-medium mb-8" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+            Swipe across flying bottles to slice them for coins!
+          </p>
+
+          {/* START Button */}
+          <button
+            onClick={handleStartGame}
+            disabled={gameState === 'loading'}
+            className="w-56 py-3.5 bg-[#B92429] hover:bg-[#9E1B20] active:scale-95 text-white font-anton text-2xl tracking-widest rounded-2xl shadow-xl transition-transform animate-pulse flex items-center justify-center"
+          >
+            {gameState === 'loading' ? 'LOADING...' : 'START'}
+          </button>
+
+          <Link
+            href="/play"
+            className="mt-6 text-xs text-white/60 hover:text-white underline font-semibold"
+          >
+            ← Back to Games
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // RENDER: 3-2-1 COUNTDOWN SCREEN
+  // -------------------------------------------------------------
+  if (gameState === 'countdown') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center overflow-hidden select-none">
+        {renderWoodenBoard()}
+
         <div
-          ref={gameAreaRef}
-          onTouchStart={(e) => {
-            const touch = e.touches[0];
-            handlePointerDown(touch.clientX, touch.clientY);
+          key={String(countdownNum)}
+          className="relative z-10 text-7xl font-anton text-[#FFE14D] tracking-widest animate-ping"
+          style={{
+            animationDuration: '0.6s',
+            animationIterationCount: '1',
+            textShadow: '0 0 30px rgba(255,225,77,0.8)',
           }}
-          onTouchMove={(e) => {
-            const touch = e.touches[0];
-            handlePointerMove(touch.clientX, touch.clientY);
-          }}
-          onTouchEnd={handlePointerUp}
-          onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
-          onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
-          onMouseUp={handlePointerUp}
-          style={{ touchAction: 'none' }}
-          className="fixed inset-0 w-full h-[100dvh] bg-gradient-to-b from-[#3D0B0E] via-[#85161B] to-[#B92429] overflow-hidden select-none touch-none cursor-crosshair z-40"
         >
-          {/* Top Thin Gold Timer Bar */}
-          <div className="absolute top-0 left-0 right-0 z-50 p-3 pointer-events-none">
-            <div className="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/20 mb-2">
-              <div
-                className="h-full bg-[#FFC93C] rounded-full transition-all duration-75 ease-linear"
-                style={{ width: `${(timeLeftMs / 30000) * 100}%` }}
-              />
-            </div>
+          {countdownNum}
+        </div>
+      </div>
+    );
+  }
 
-            {/* Top Bar: Score & Seconds */}
-            <div className="flex justify-between items-center px-1">
-              <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full border border-[#FFC93C]/40">
-                <span className="text-[11px] font-extrabold text-white/80">SCORE:</span>
-                <span className="font-anton text-[22px] text-[#FFC93C] leading-none">
-                  +{score}
-                </span>
-              </div>
-              <div className="font-anton text-[16px] text-white/90 bg-black/30 px-3 py-1 rounded-full">
-                {(timeLeftMs / 1000).toFixed(0)}s
-              </div>
-            </div>
+  // -------------------------------------------------------------
+  // RENDER: ACTIVE GAMEPLAY / PAUSED / RESULT / TIMES UP
+  // -------------------------------------------------------------
+  return (
+    <div
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      className="fixed inset-0 w-screen h-screen overflow-hidden select-none touch-none cursor-crosshair"
+      style={{
+        WebkitTouchCallout: 'none',
+        userSelect: 'none',
+      }}
+    >
+      {/* 1. Wooden Cutting Board Background */}
+      {renderWoodenBoard()}
+
+      {/* 2. Juice Splats on Background */}
+      {juiceSplatsRef.current.map((splat) => {
+        const ageMs = performance.now() - splat.createdAt;
+        const opacity = ageMs > 2500 ? Math.max(0, 1 - (ageMs - 2500) / 1500) : 1;
+
+        return (
+          <div
+            key={splat.id}
+            className="absolute pointer-events-none transition-transform"
+            style={{
+              left: `${splat.x - splat.size / 2}px`,
+              top: `${splat.y - splat.size / 2}px`,
+              width: `${splat.size}px`,
+              height: `${splat.size}px`,
+              backgroundColor: splat.color,
+              borderRadius: splat.borderRadius,
+              transform: `rotate(${splat.rotation}deg)`,
+              opacity,
+            }}
+          />
+        );
+      })}
+
+      {/* 3. Flying Active Bottles (DOM Elements with requestAnimationFrame transforms) */}
+      {activeBottlesRef.current.map((bottle) => {
+        if (bottle.isSliced || bottle.isRemoved) return null;
+
+        return (
+          <div
+            key={bottle.index}
+            className="absolute pointer-events-none will-change-transform"
+            style={{
+              left: `${bottle.x}px`,
+              top: `${bottle.y}px`,
+              transform: `rotate(${bottle.rotation}deg)`,
+            }}
+          >
+            <BottleGraphic type={bottle.type} />
           </div>
+        );
+      })}
 
-          {/* Canvas for Swipe Trail */}
-          <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-30" />
+      {/* 4. Sliced Bottle Halves (Falling apart outward with gravity) */}
+      {bottleHalvesRef.current.map((half) => {
+        const age = (performance.now() - half.createdAt) / 1000;
+        const opacity = Math.max(0, 1 - age / 0.65);
 
-          {/* Red Flash Overlay when Expired is hit */}
-          {screenFlashRed && (
-            <div className="absolute inset-0 bg-red-600/60 z-50 pointer-events-none animate-ping" />
-          )}
+        return (
+          <div
+            key={half.id}
+            className="absolute pointer-events-none will-change-transform"
+            style={{
+              left: `${half.x}px`,
+              top: `${half.y}px`,
+              transform: `rotate(${half.rot}deg)`,
+              opacity,
+            }}
+          >
+            <BottleGraphic type={half.type} clipSide={half.side} />
+          </div>
+        );
+      })}
 
-          {/* Expired Banner */}
-          {expiredBanner && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm pointer-events-none">
-              <h2 className="font-anton text-[48px] text-[#FF4D4D] leading-none drop-shadow-lg tracking-wide animate-bounce">
-                EXPIRED!
-              </h2>
-              <span className="font-anton text-[20px] text-[#FFC93C] mt-2">
-                -3 COINS
-              </span>
-            </div>
-          )}
+      {/* 5. 3D Juice Droplets */}
+      {juiceDropletsRef.current.map((drop) => {
+        const age = (performance.now() - drop.createdAt) / 1000;
+        const opacity = Math.max(0, 1 - age / 0.55);
 
-          {/* Combo Indicator */}
-          {comboText && (
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce font-anton text-[28px] text-[#FFC93C] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-              {comboText}
-            </div>
-          )}
+        return (
+          <div
+            key={drop.id}
+            className="absolute pointer-events-none rounded-full will-change-transform"
+            style={{
+              left: `${drop.x - drop.size / 2}px`,
+              top: `${drop.y - drop.size / 2}px`,
+              width: `${drop.size}px`,
+              height: `${drop.size}px`,
+              background: `radial-gradient(circle at 35% 35%, ${drop.lightColor}, ${drop.color} 70%, ${drop.darkColor} 100%)`,
+              opacity,
+            }}
+          />
+        );
+      })}
 
-          {/* Active Flying Bottles (Positioned via kinematic calculations) */}
-          {bottles.map((b) => {
-            if (slicedIndicesRef.current.has(b.index)) return null;
-            const pos = activePositionsRef.current.get(b.index);
-            if (!pos) return null;
+      {/* 6. Score Pop-ups */}
+      {scorePopsRef.current.map((pop) => {
+        const age = (performance.now() - pop.createdAt) / 1000;
+        const opacity = Math.max(0, 1 - age / 0.55);
+        const floatY = age * 90; // Float up 50px
 
-            return (
-              <div
-                key={b.index}
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  transform: `translate3d(${pos.x}px, ${pos.y}px, 0) rotate(${pos.rotation}deg)`,
-                  width: '50px',
-                  height: '90px',
-                }}
-                className="pointer-events-none will-change-transform"
-              >
-                <BottleSVG type={b.type} />
-              </div>
-            );
-          })}
+        return (
+          <div
+            key={pop.id}
+            className="absolute pointer-events-none font-anton tracking-wide select-none will-change-transform"
+            style={{
+              left: `${pop.x}px`,
+              top: `${pop.y - floatY}px`,
+              fontSize: `${pop.fontSize}px`,
+              color: pop.color,
+              opacity,
+              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+              transform: 'translate(-50%, -50%)',
+            }}
+          >
+            {pop.text}
+          </div>
+        );
+      })}
 
-          {/* Sliced Halves separating along swipe angle */}
-          {slicedHalves.map((h) => (
-            <div
-              key={h.id}
-              style={{
-                position: 'absolute',
-                left: `${h.x}px`,
-                top: `${h.y}px`,
-                width: '50px',
-                height: '90px',
-              }}
-              className="pointer-events-none"
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  clipPath: 'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)',
-                  animation: 'splitLeft 0.5s ease-out forwards',
-                }}
-              >
-                <BottleSVG type={h.type} />
-              </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)',
-                  animation: 'splitRight 0.5s ease-out forwards',
-                }}
-              >
-                <BottleSVG type={h.type} />
-              </div>
-            </div>
-          ))}
+      {/* 7. Canvas Blade Trail (Overlay for drawing smooth blade line) */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 pointer-events-none w-full h-full z-20"
+      />
 
-          {/* Juice Droplets exploding outward */}
-          {droplets.map((d) => (
-            <div
-              key={d.id}
-              style={
-                {
-                  position: 'absolute',
-                  left: `${d.x}px`,
-                  top: `${d.y}px`,
-                  width: `${d.size}px`,
-                  height: `${d.size}px`,
-                  borderRadius: '50%',
-                  backgroundColor: d.color,
-                  animation: 'dropletFly 0.4s ease-out forwards',
-                  '--dx': `${d.dx}px`,
-                  '--dy': `${d.dy}px`,
-                } as React.CSSProperties
-              }
-              className="pointer-events-none"
-            />
-          ))}
+      {/* 8. HUD: Score (Top-Left) & Timer (Top-Right) & Pause Button (Bottom-Left) */}
+      <div className="absolute inset-x-0 top-0 p-4 flex justify-between items-center pointer-events-none z-30">
+        {/* Score Top-Left */}
+        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20">
+          <CoinIcon size={24} />
+          <span
+            className="text-3xl font-anton text-[#FFC93C] tracking-wide"
+            style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
+          >
+            {score}
+          </span>
+        </div>
 
-          {/* Floating Score Pops */}
-          {scorePops.map((sp) => (
-            <div
-              key={sp.id}
-              style={{
-                position: 'absolute',
-                left: `${sp.x}px`,
-                top: `${sp.y}px`,
-                animation: 'scoreFloat 0.5s ease-out forwards',
-              }}
-              className={`font-anton text-[26px] select-none pointer-events-none drop-shadow-md ${
-                sp.text.startsWith('-') ? 'text-[#FF4D4D]' : 'text-[#FFC93C]'
-              }`}
-            >
-              {sp.text}
-            </div>
-          ))}
+        {/* Timer Top-Right */}
+        <div className="bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20">
+          <span
+            className="text-3xl font-anton text-[#FFC93C] tracking-widest"
+            style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
+          >
+            0:{timeLeft.toString().padStart(2, '0')}
+          </span>
+        </div>
+      </div>
+
+      {/* Pause Button Bottom-Left */}
+      <div className="absolute bottom-4 left-4 z-30 pointer-events-auto">
+        <button
+          onClick={handlePause}
+          className="w-10 h-10 rounded-full bg-black/40 border border-white/25 flex items-center justify-center text-white hover:bg-black/60 active:scale-95 transition-transform"
+          aria-label="Pause Game"
+        >
+          <span className="font-mono font-black text-sm tracking-tighter">II</span>
+        </button>
+      </div>
+
+      {/* 9. Combo Banner */}
+      {comboBanner && (
+        <div
+          key={comboBanner.id}
+          className="absolute inset-0 flex items-center justify-center pointer-events-none z-40 animate-ping"
+          style={{ animationDuration: '0.8s', animationIterationCount: '1' }}
+        >
+          <div
+            className="text-5xl font-anton text-white tracking-widest px-6 py-2 rounded-2xl"
+            style={{
+              textShadow:
+                '-2px -2px 0 #FFC93C, 2px -2px 0 #FFC93C, -2px 2px 0 #FFC93C, 2px 2px 0 #FFC93C, 0 4px 15px rgba(0,0,0,0.8)',
+            }}
+          >
+            COMBO x{comboBanner.count}!
+          </div>
         </div>
       )}
 
-      {/* VIEW 3: ALREADY PLAYED TODAY */}
-      {gameState === 'already_played' && (
-        <div className="flex flex-col justify-between h-full min-h-[100dvh] w-full p-5">
-          <div className="w-full">
-            <Header variant="red" />
+      {/* 10. Expired Hit Red Overlay & Slang Text */}
+      {gameState === 'expired_hit' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#B92429]/40 backdrop-blur-xs animate-fade-in pointer-events-none">
+          <h1
+            className="text-6xl font-anton text-[#B92429] tracking-wider uppercase animate-bounce"
+            style={{
+              textShadow:
+                '-2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF, 0 6px 20px rgba(0,0,0,0.9)',
+            }}
+          >
+            EXPIRED!
+          </h1>
+        </div>
+      )}
+
+      {/* 11. Time&apos;s Up Text Banner */}
+      {gameState === 'times_up' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
+          <h1
+            className="text-6xl font-anton text-white tracking-wider uppercase animate-pulse"
+            style={{ textShadow: '0 4px 20px rgba(0,0,0,0.9)' }}
+          >
+            TIME&apos;S UP!
+          </h1>
+        </div>
+      )}
+
+      {/* 12. PAUSE OVERLAY */}
+      {gameState === 'paused' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm pointer-events-auto">
+          <div className="bg-white rounded-[24px] p-6 max-w-xs w-full text-center shadow-2xl">
+            <h2 className="text-3xl font-anton text-[#B92429] mb-4">GAME PAUSED</h2>
+            <button
+              onClick={handleResume}
+              className="w-full bg-[#B92429] text-white font-anton py-3 rounded-xl tracking-wider text-lg mb-3 shadow-md"
+            >
+              RESUME
+            </button>
             <Link
               href="/play"
-              className="inline-flex items-center gap-1.5 text-white/90 hover:text-white font-montserrat font-bold text-[13px] tracking-wide mt-2 mb-4"
+              className="inline-block text-xs text-gray-500 font-semibold hover:text-gray-800"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M15 19l-7-7 7-7" />
-              </svg>
-              BACK TO PLAY
+              Quit to Games
             </Link>
           </div>
+        </div>
+      )}
 
-          <div className="my-auto w-full max-w-[340px] mx-auto bg-white rounded-[24px] p-7 shadow-2xl flex flex-col items-center text-center border-4 border-[#FFC93C]">
-            <h2 className="font-anton text-[28px] text-[#B92429] uppercase leading-tight mb-2">
-              DONE TODAY!
+      {/* 13. RESULT SCREEN OVERLAY */}
+      {gameState === 'result' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto select-none">
+          <div className="relative bg-white rounded-[24px] p-6 max-w-sm w-full mx-auto text-center shadow-2xl border border-white/40">
+            {/* Close Cross Top-Right */}
+            <Link
+              href="/home"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full"
+            >
+              ×
+            </Link>
+
+            {/* Header Title */}
+            <h2 className="text-2xl font-anton text-[#B92429] tracking-wide mb-1 uppercase">
+              {resultData.hitExpired ? 'OOPS — EXPIRED BOTTLE!' : "TIME'S UP!"}
             </h2>
-            <p className="text-[14px] font-bold text-[#7A4547] mb-4">
-              Bottles sliced: {todayResult?.sliced ?? 0}/{todayResult?.total ?? 20} — earned +{todayResult?.coins ?? 0} coins
+
+            <div className="w-12 h-0.5 bg-gray-200 mx-auto my-2.5" />
+
+            {/* Bottles sliced */}
+            <p className="text-xs text-gray-500 font-semibold mb-3">
+              Bottles sliced: {resultData.bottlesSliced} / {resultData.totalBottles}
             </p>
 
-            <div className="bg-[#FFF5F3] border border-[#F4D2CF] rounded-[16px] px-4 py-3 mb-5 w-full">
-              <span className="text-[12px] font-bold text-[#7A4547] block mb-1">
-                Next game unlocks in
-              </span>
-              <span className="font-anton text-[24px] text-[#B92429]">
-                {cooldownText || 'Calculating...'}
-              </span>
+            {/* Animated Coin Bounce */}
+            <div className="my-2 flex justify-center animate-bounce">
+              <CoinIcon size={48} />
             </div>
 
-            <button
-              type="button"
-              disabled
-              className="w-full h-[52px] bg-gray-200 text-gray-500 font-anton text-[18px] uppercase rounded-[16px] cursor-not-allowed mb-3 tracking-wide"
-            >
-              COME BACK TOMORROW
-            </button>
-
-            <Link
-              href="/play"
-              className="text-[#B92429] font-montserrat font-bold text-[13px] underline tracking-wide"
-            >
-              ← BACK TO PLAY
-            </Link>
-          </div>
-
-          <div className="pb-5 text-center text-[12px] font-bold text-white/70">
-            Zee Sip Fast Reflex Challenge · 1 play per day
-          </div>
-        </div>
-      )}
-
-      {/* VIEW 4: RESULT SCREEN */}
-      {gameState === 'game_over' && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-5 select-none animate-fadeIn">
-          <div className="w-full max-w-[340px] bg-white rounded-[24px] p-7 shadow-2xl flex flex-col items-center text-center relative border-4 border-[#FFC93C]">
-            {/* Top Close X -> /home */}
-            <button
-              type="button"
-              onClick={() => router.push('/home')}
-              aria-label="Close"
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#FFF5F3] text-[#7A4547] flex items-center justify-center font-bold text-base hover:bg-[#FCE4E1] cursor-pointer"
-            >
-              ✕
-            </button>
-
-            <h2 className="font-anton text-[28px] text-[#B92429] leading-tight uppercase mb-1">
-              {hitExpired ? 'OOPS — EXPIRED BOTTLE!' : "TIME'S UP!"}
-            </h2>
-
-            <span className="text-[13px] font-bold text-[#7A4547] mb-3">
-              Bottles sliced: {slicedIndicesRef.current.size}/{bottles.length}
-            </span>
-
-            {/* Coin SVG with Bounce Animation */}
+            {/* Coins Won */}
             <div
-              style={{
-                animation: 'coinBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-              }}
-              className="my-1.5 flex items-center justify-center"
+              className="text-4xl font-anton text-[#FFC93C] tracking-wide mb-3"
+              style={{ textShadow: '0 2px 6px rgba(0,0,0,0.15)' }}
             >
-              <svg width="70" height="70" viewBox="0 0 24 24" className="drop-shadow-lg">
-                <circle cx="12" cy="12" r="11" fill="#FFC93C" />
-                <circle cx="12" cy="12" r="7.5" fill="none" stroke="#B92429" strokeWidth="1.6" />
-                <polygon
-                  points="12,5 13.8,9.5 18.5,10.2 15,13.5 16,18.2 12,15.8 8,18.2 9,13.5 5.5,10.2 10.2,9.5"
-                  fill="#B92429"
-                />
-              </svg>
+              +{resultData.coinsWon} SIP COINS
             </div>
 
-            {/* +Z SIP COINS in gold Anton 48px */}
-            <div className="font-anton text-[48px] text-[#FFC93C] leading-none drop-shadow-[0_2px_4px_rgba(61,11,14,0.3)] my-1">
-              +{coinsWon}
-            </div>
-
-            <span className="font-anton text-[20px] text-[#B92429] uppercase tracking-wide mb-3">
-              SIP COINS
-            </span>
-
-            {/* Progress Bar below: Total X / 500 coins */}
-            <div className="w-full mb-3 px-1">
-              <div className="flex justify-between items-center text-[12px] font-bold text-[#3D0B0E] mb-1">
-                <span>Total: {balance} / 500 coins</span>
-                <span className="text-[#7A4547]">
-                  {Math.max(0, 500 - balance)} needed
-                </span>
+            {/* Progress to 500 Coins */}
+            <div className="bg-[#FFF8F0] border border-[#FFE14D]/40 rounded-xl p-3 mb-4">
+              <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1.5">
+                <span>Total: {resultData.newBalance} / 500 coins</span>
+                <span>{Math.min(100, Math.round((resultData.newBalance / 500) * 100))}%</span>
               </div>
-              <div className="w-full h-3 bg-[#FFF5F3] rounded-full border border-[#F4D2CF] overflow-hidden">
+              <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#FFC93C] rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${Math.min(100, (balance / 500) * 100)}%` }}
+                  className="bg-[#FFC93C] h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${Math.min(100, Math.max(3, (resultData.newBalance / 500) * 100))}%`,
+                  }}
                 />
               </div>
             </div>
 
-            <span className="text-[12px] font-bold text-[#7A4547] mb-4">
-              Next game in {cooldownText}
-            </span>
-
-            {/* CONTINUE Button -> /play */}
+            {/* Continue Button */}
             <button
-              type="button"
               onClick={() => router.push('/play')}
-              className="w-full h-[54px] bg-[#B92429] hover:bg-[#A31F24] text-white font-anton text-[20px] uppercase rounded-[16px] shadow-lg transition-all cursor-pointer flex items-center justify-center tracking-wide"
+              className="w-full bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton py-3.5 rounded-xl tracking-wider text-base shadow-lg transition-transform active:scale-95 mb-3 uppercase"
             >
               CONTINUE
             </button>
+
+            {/* Next play countdown */}
+            <p className="text-[11px] text-gray-400 font-medium">
+              Next play in: {midnightCountdown}
+            </p>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
