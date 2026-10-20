@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 interface StatsData {
   total_users: number;
@@ -41,7 +42,22 @@ function AdminDashboardContent() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
+  // Delete User & Modal States
+  const [userToDelete, setUserToDelete] = useState<UserRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [currentAuthUserId, setCurrentAuthUserId] = useState<string | null>(null);
+
   useEffect(() => {
+    // 0. Fetch Current Logged-In Supabase Auth User (Safety: Prevent self-deletion)
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setCurrentAuthUserId(user.id);
+      }
+    });
+
     // 1. Fetch Stats
     fetch('/api/admin/stats')
       .then((res) => {
@@ -80,6 +96,59 @@ function AdminDashboardContent() {
     router.push('/admin');
   };
 
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    const targetUser = userToDelete;
+    setIsDeleting(true);
+    setDeletingUserId(targetUser.id);
+
+    try {
+      const res = await fetch(`/api/admin/users/${targetUser.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Failed to delete user');
+        setIsDeleting(false);
+        setDeletingUserId(null);
+        return;
+      }
+
+      // Close modal
+      setUserToDelete(null);
+      setIsDeleting(false);
+
+      // Fade-out row animation (300ms) then remove from state
+      setTimeout(() => {
+        setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+        setLeaderboard((prev) => prev.filter((l) => l.id !== targetUser.id));
+        setDeletingUserId(null);
+      }, 300);
+
+      // Decrement total users and subtract user coins
+      setStats((prev) =>
+        prev
+          ? {
+              ...prev,
+              total_users: Math.max(0, prev.total_users - 1),
+              total_coins: Math.max(0, prev.total_coins - (targetUser.total_coins || 0)),
+            }
+          : prev
+      );
+
+      // Show brief green toast notification
+      setToastMessage(`User ${targetUser.display_name} deleted successfully`);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+    } catch {
+      alert('An unexpected network error occurred while deleting the user.');
+      setIsDeleting(false);
+      setDeletingUserId(null);
+    }
+  };
+
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
@@ -102,7 +171,83 @@ function AdminDashboardContent() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
+    <div className="flex flex-col min-h-screen w-full relative">
+      {/* GREEN TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-[#16A34A] text-white px-5 py-3.5 rounded-[10px] shadow-2xl flex items-center gap-2.5 font-bold text-[14px] border border-green-700 animate-fade-in transition-all">
+          <span className="text-base leading-none">✓</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* CONFIRMATION DIALOG MODAL */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-[16px] max-w-md w-full p-6 shadow-2xl border border-[#E0E0E0] flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold text-lg">
+                🗑️
+              </div>
+              <h3 className="font-anton text-[22px] text-[#3D0B0E] uppercase tracking-wide">
+                Delete User?
+              </h3>
+            </div>
+
+            {/* Target User Info Box */}
+            <div className="bg-[#FFF5F3] border border-[#F4D2CF] rounded-[10px] p-4 flex flex-col gap-1.5 text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase">Name</span>
+                <span className="text-[13px] font-bold text-[#3D0B0E]">{userToDelete.display_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase">Email</span>
+                <span className="text-[13px] font-medium text-gray-700">{userToDelete.email}</span>
+              </div>
+              {userToDelete.phone_number && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-[#7A4547] uppercase">Phone</span>
+                  <span className="text-[13px] font-medium text-gray-700">+91 {userToDelete.phone_number}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-[#7A4547] uppercase">Coins</span>
+                <span className="text-[13px] font-anton text-[#B92429]">{userToDelete.total_coins}</span>
+              </div>
+            </div>
+
+            <p className="text-[13px] text-gray-600 leading-relaxed text-left">
+              This will permanently delete this user&apos;s profile, all their coins, game history, and transaction records. This cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => !isDeleting && setUserToDelete(null)}
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-[8px] bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-700 font-bold text-[13px] uppercase tracking-wider cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-[8px] bg-[#DC2626] hover:bg-[#B91C1C] disabled:bg-red-400 text-white font-bold text-[13px] uppercase tracking-wider cursor-pointer transition-colors shadow-sm flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  'Delete Permanently'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER: Full width sticky top bar */}
       <header className="sticky top-0 z-40 w-full bg-white border-b border-[#E0E0E0] shadow-xs">
         <div className="w-full max-w-[1200px] mx-auto px-8 py-4 flex items-center justify-between">
@@ -229,7 +374,7 @@ function AdminDashboardContent() {
                         <th className="p-3.5">TEAM</th>
                         <th className="p-3.5 text-right">COINS</th>
                         <th className="p-3.5">JOINED</th>
-                        <th className="p-3.5 text-center w-24">ACTION</th>
+                        <th className="p-3.5 text-center w-36">ACTION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E0E0E0] text-[13px] font-bold">
@@ -238,7 +383,11 @@ function AdminDashboardContent() {
                           key={user.id}
                           className={`${
                             idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
-                          } hover:bg-amber-50/50 transition-colors`}
+                          } hover:bg-amber-50/50 transition-all duration-300 ${
+                            deletingUserId === user.id
+                              ? 'opacity-0 scale-95 pointer-events-none'
+                              : 'opacity-100'
+                          }`}
                         >
                           <td className="p-3.5 text-center text-gray-400 font-normal">
                             {idx + 1}
@@ -274,12 +423,24 @@ function AdminDashboardContent() {
                             {formatDate(user.created_at)}
                           </td>
                           <td className="p-3.5 text-center">
-                            <Link
-                              href={`/admin/users/${user.id}`}
-                              className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
-                            >
-                              VIEW
-                            </Link>
+                            <div className="flex items-center justify-center gap-2">
+                              <Link
+                                href={`/admin/users/${user.id}`}
+                                className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
+                              >
+                                VIEW
+                              </Link>
+                              {user.id !== currentAuthUserId && (
+                                <button
+                                  type="button"
+                                  onClick={() => setUserToDelete(user)}
+                                  disabled={deletingUserId === user.id}
+                                  className="inline-block px-3 py-1 bg-[#DC2626] hover:bg-[#B91C1C] disabled:bg-gray-400 text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors cursor-pointer"
+                                >
+                                  DELETE
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -301,7 +462,7 @@ function AdminDashboardContent() {
                       <th className="p-3.5">NAME</th>
                       <th className="p-3.5">PHONE</th>
                       <th className="p-3.5 text-right">TOTAL COINS (NET)</th>
-                      <th className="p-3.5 text-center w-28">ACTION</th>
+                      <th className="p-3.5 text-center w-36">ACTION</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E0E0E0] text-[13px] font-bold">
@@ -316,13 +477,18 @@ function AdminDashboardContent() {
                         const isRank1 = row.rank === 1;
                         const isRank2 = row.rank === 2;
                         const isRank3 = row.rank === 3;
+                        const matchingUser = users.find((u) => u.id === row.id);
 
                         return (
                           <tr
                             key={row.id}
                             className={`${
                               idx % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
-                            } hover:bg-amber-50/50 transition-colors`}
+                            } hover:bg-amber-50/50 transition-all duration-300 ${
+                              deletingUserId === row.id
+                                ? 'opacity-0 scale-95 pointer-events-none'
+                                : 'opacity-100'
+                            }`}
                           >
                             <td className="p-3.5 text-center">
                               <span
@@ -349,12 +515,36 @@ function AdminDashboardContent() {
                               {row.total_coins}
                             </td>
                             <td className="p-3.5 text-center">
-                              <Link
-                                href={`/admin/users/${row.id}`}
-                                className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
-                              >
-                                VIEW
-                              </Link>
+                              <div className="flex items-center justify-center gap-2">
+                                <Link
+                                  href={`/admin/users/${row.id}`}
+                                  className="inline-block px-3 py-1 bg-[#B92429] hover:bg-[#9E1B20] text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors"
+                                >
+                                  VIEW
+                                </Link>
+                                {row.id !== currentAuthUserId && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setUserToDelete(
+                                        matchingUser || {
+                                          id: row.id,
+                                          display_name: row.display_name,
+                                          email: 'No email found',
+                                          phone_number: row.phone_number,
+                                          team: null,
+                                          created_at: row.created_at,
+                                          total_coins: row.total_coins,
+                                        }
+                                      )
+                                    }
+                                    disabled={deletingUserId === row.id}
+                                    className="inline-block px-3 py-1 bg-[#DC2626] hover:bg-[#B91C1C] disabled:bg-gray-400 text-white font-anton text-[12px] uppercase rounded-[6px] shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    DELETE
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
