@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     if (duplicate && duplicate.length > 0) {
       return NextResponse.json(
-        { error: 'This number is already linked to another account. Each number can only be used once.' },
+        { error: 'This phone number is already linked to another account' },
         { status: 409 }
       );
     }

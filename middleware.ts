@@ -19,14 +19,11 @@ export async function middleware(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname;
 
-  // Returning user check: if user is logged in, immediately redirect from / to /home
+  // Returning user check: if user is logged in, immediately redirect from / to /home with 307
   if (pathname === '/') {
-    const hasAuthCookie = req.cookies
-      .getAll()
-      .some((c) => (c.name.startsWith('sb-') && c.name.includes('-auth-token')) || c.name === 'supabase-auth-token');
-
-    if (hasAuthCookie && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
+        let res = NextResponse.next({ request: req });
         const supabase = createServerClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -37,6 +34,8 @@ export async function middleware(req: NextRequest) {
               },
               setAll(cookiesToSet) {
                 cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+                res = NextResponse.next({ request: req });
+                cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
               },
             },
           }
@@ -44,7 +43,7 @@ export async function middleware(req: NextRequest) {
 
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          return NextResponse.redirect(new URL('/home', req.url));
+          return NextResponse.redirect(new URL('/home', req.url), 307);
         }
       } catch (err) {
         console.error('Middleware landing redirect error:', err);

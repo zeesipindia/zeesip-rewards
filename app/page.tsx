@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function LandingPage() {
   const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [viewState, setViewState] = useState<'landing' | 'spinning' | 'win'>('landing');
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [wonAmount, setWonAmount] = useState<number>(30);
@@ -21,9 +22,11 @@ export default function LandingPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        router.push('/home');
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        router.replace('/home');
+      } else {
+        setIsCheckingAuth(false);
       }
     });
 
@@ -43,6 +46,13 @@ export default function LandingPage() {
   // Handle SPIN NOW click
   const handleSpinClick = async () => {
     if (viewState !== 'landing') return;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      router.replace('/home');
+      return;
+    }
 
     setErrorMsg(null);
     setViewState('spinning');
@@ -123,6 +133,10 @@ export default function LandingPage() {
       setToastMsg(null);
     }, 3500);
   };
+
+  if (isCheckingAuth) {
+    return <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-[#B92429]" />;
+  }
 
   return (
     <main className="min-h-[100dvh] w-full max-w-[430px] mx-auto flex flex-col justify-between bg-[#B92429] text-white relative overflow-hidden select-none shadow-2xl">

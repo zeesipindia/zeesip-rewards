@@ -222,14 +222,14 @@ export function initAudioContext() {
   getAudioContext();
 }
 
-// 1. BLADE SWOOSH (on any swipe)
-// Filtered white noise, 80ms duration, bandpass filter at 800Hz, quick attack, medium decay
+// 1. SWOOSH (on any swipe movement)
+// Filtered white noise, 60ms duration, bandpass filter at 800Hz, quick attack, medium decay
 export function playBladeSwoosh() {
   const ctx = getAudioContext();
   if (!ctx) return;
 
   try {
-    const duration = 0.08;
+    const duration = 0.06;
     const bufferSize = Math.floor(ctx.sampleRate * duration);
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -243,11 +243,11 @@ export function playBladeSwoosh() {
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(800, ctx.currentTime);
-    filter.Q.setValueAtTime(2.5, ctx.currentTime);
+    filter.Q.setValueAtTime(2.2, ctx.currentTime);
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.015);
+    gain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
     noise.connect(filter);
@@ -257,9 +257,10 @@ export function playBladeSwoosh() {
     noise.start();
   } catch {}
 }
+export const playFruitSwoosh = playBladeSwoosh;
 
-// 2. SLICE HIT (when a bottle is sliced)
-// Sharp "SHING": triangle wave at 1200Hz swept to 2400Hz over 40ms + short noise burst, total 60ms
+// 2. SLICE HIT (fruit sliced)
+// Sharp "SHING": triangle wave 1200Hz -> 2400Hz over 40ms + short noise burst (splat) 30ms, low-pass 500Hz
 export function playSliceHit() {
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -273,16 +274,127 @@ export function playSliceHit() {
     osc.frequency.setValueAtTime(1200, startTime);
     osc.frequency.exponentialRampToValueAtTime(2400, startTime + 0.04);
 
-    oscGain.gain.setValueAtTime(0.25, startTime);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.06);
+    oscGain.gain.setValueAtTime(0.28, startTime);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.05);
 
     osc.connect(oscGain);
     oscGain.connect(ctx.destination);
     osc.start(startTime);
-    osc.stop(startTime + 0.06);
+    osc.stop(startTime + 0.05);
 
     // Short noise burst (the splat)
-    const noiseDuration = 0.04;
+    const noiseDuration = 0.03;
+    const bufferSize = Math.floor(ctx.sampleRate * noiseDuration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, startTime);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.2, startTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + noiseDuration);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(startTime);
+  } catch {}
+}
+export const playFruitSliceHit = playSliceHit;
+
+// 3. JUICE SPLASH (right after slice)
+// White noise burst, 60ms, low-pass filter at 600Hz
+export function playJuiceSplash() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const startTime = ctx.currentTime;
+    const duration = 0.06;
+    const bufferSize = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(600, startTime);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.16, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(startTime);
+  } catch {}
+}
+export const playFruitJuiceSplash = playJuiceSplash;
+
+// 4. COMBO BONUS (2+ fruits)
+// Quick ascending: sine wave 440Hz -> 660Hz -> 880Hz, each note 25ms
+export function playComboChime() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const freqs = [440, 660, 880];
+    freqs.forEach((f, i) => {
+      const t = ctx.currentTime + i * 0.025;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t);
+
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.03);
+    });
+  } catch {}
+}
+export const playComboBonus = playComboChime;
+
+// 5. BOMB EXPLOSION
+// Deep rumble: sine wave at 60Hz, 300ms, slow decay + noise burst (explosion) 150ms, bandpass 200-2000Hz
+export function playBombExplosion() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const startTime = ctx.currentTime;
+    // Deep 60Hz rumble
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(60, startTime);
+    osc.frequency.exponentialRampToValueAtTime(35, startTime + 0.3);
+
+    oscGain.gain.setValueAtTime(0.45, startTime);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + 0.3);
+
+    // Explosion noise burst
+    const noiseDuration = 0.15;
     const bufferSize = Math.floor(ctx.sampleRate * noiseDuration);
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -294,10 +406,11 @@ export function playSliceHit() {
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1500, startTime);
+    filter.frequency.setValueAtTime(600, startTime);
+    filter.Q.setValueAtTime(0.8, startTime);
 
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.15, startTime);
+    noiseGain.gain.setValueAtTime(0.3, startTime);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + noiseDuration);
 
     noise.connect(filter);
@@ -306,47 +419,31 @@ export function playSliceHit() {
     noise.start(startTime);
   } catch {}
 }
+export const playExpiredThud = playBombExplosion;
+export const playExpiredHit = playBombExplosion;
 
-// 3. JUICE SPLASH (immediately after slice)
-// White noise burst, 80ms, low-pass filter at 600Hz + delayed quiet copy at 40ms
-export function playJuiceSplash() {
+// 6. TIMER WARNING (last 5 seconds)
+// Quick "tick" sound each second: sine wave 1000Hz, 20ms
+export function playTimerWarningTick() {
   const ctx = getAudioContext();
   if (!ctx) return;
 
   try {
-    const makeSplash = (delay: number, vol: number) => {
-      const startTime = ctx.currentTime + delay;
-      const duration = 0.08;
-      const bufferSize = Math.floor(ctx.sampleRate * duration);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, ctx.currentTime);
 
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(600, startTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
 
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(vol, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-
-      noise.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-      noise.start(startTime);
-    };
-
-    makeSplash(0, 0.16);
-    makeSplash(0.04, 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.02);
   } catch {}
 }
 
-// 4. GOLD BOTTLE BONUS (bling chime)
-// Sine wave: 880Hz for 50ms, then 1320Hz for 80ms, with slight echo
 export function playGoldBonus() {
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -354,7 +451,6 @@ export function playGoldBonus() {
   try {
     const playChime = (delay: number, vol: number) => {
       const t0 = ctx.currentTime + delay;
-      // Note 1: 880Hz
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = 'sine';
@@ -366,7 +462,6 @@ export function playGoldBonus() {
       osc1.start(t0);
       osc1.stop(t0 + 0.05);
 
-      // Note 2: 1320Hz
       const t1 = t0 + 0.05;
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
@@ -381,82 +476,7 @@ export function playGoldBonus() {
     };
 
     playChime(0, 0.22);
-    playChime(0.09, 0.08); // Slight echo
-  } catch {}
-}
-
-// 5. EXPIRED BOTTLE HIT
-// Deep "THUD" + shattering: sine wave at 80Hz for 200ms + burst of white noise with high-pass filter
-export function playExpiredThud() {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  try {
-    const startTime = ctx.currentTime;
-    // Deep thud: 80Hz sine wave
-    const osc = ctx.createOscillator();
-    const oscGain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(80, startTime);
-    osc.frequency.exponentialRampToValueAtTime(45, startTime + 0.2);
-
-    oscGain.gain.setValueAtTime(0.35, startTime);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.2);
-
-    osc.connect(oscGain);
-    oscGain.connect(ctx.destination);
-    osc.start(startTime);
-    osc.stop(startTime + 0.2);
-
-    // Shatter noise: high-pass filtered white noise
-    const noiseDuration = 0.15;
-    const bufferSize = Math.floor(ctx.sampleRate * noiseDuration);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(1400, startTime);
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.2, startTime);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + noiseDuration);
-
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-    noise.start(startTime);
-  } catch {}
-}
-
-// 6. COMBO (2+ bottles in one swipe)
-// Quick ascending tone: 440Hz -> 660Hz -> 880Hz, each 30ms
-export function playComboChime() {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  try {
-    const freqs = [440, 660, 880];
-    freqs.forEach((f, i) => {
-      const t = ctx.currentTime + i * 0.03;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(f, t);
-
-      gain.gain.setValueAtTime(0.18, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.035);
-    });
+    playChime(0.09, 0.08);
   } catch {}
 }
 
@@ -464,7 +484,6 @@ export function playComboChime() {
 export const playSliceShing = playSliceHit;
 export const playJuiceSplat = playJuiceSplash;
 export const playGoldPling = playGoldBonus;
-export const playExpiredHit = playExpiredThud;
 
 export function playCoinCollectSound() {
   const ctx = getAudioContext();

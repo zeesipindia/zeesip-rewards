@@ -2,95 +2,83 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getMidnightIST, getNextMidnightIST } from '@/lib/gameUtils';
-import { BottleType, BottleSpawn } from '@/lib/bottleTypes';
+import { ItemType, ItemSpawn } from '@/lib/bottleTypes';
 
-function generateSequence(isFirstPlay: boolean): BottleSpawn[] {
-  const bottles: BottleSpawn[] = [];
+function generateSequence(isFirstPlay: boolean): ItemSpawn[] {
+  const items: ItemSpawn[] = [];
   let currentIndex = 0;
 
-  // Phase 1: 0 - 10s (warmup: 4 bottles, every ~2.5s)
-  // No expired bottles. 0-1 gold bottle.
+  // Phase 1: 0 - 8s (WARMUP: single fruits every 2-2.5s, all mango/pineapple, NO bombs, slow arcs)
   let timeMs = 1200;
-  let goldInPhase1 = false;
-  while (timeMs < 9500) {
-    const isGold = !goldInPhase1 && Math.random() < 0.2;
-    if (isGold) goldInPhase1 = true;
-    const type: BottleType = isGold ? 'gold' : Math.random() < 0.5 ? 'mango' : 'pineapple';
+  while (timeMs < 7500) {
+    const type: ItemType = Math.random() < 0.5 ? 'mango' : 'pineapple';
     const startX = 15 + Math.random() * 70;
     const peak = 35 + Math.random() * 30; // 35% to 65% from top
     const drift = (Math.random() - 0.5) * 20;
 
-    bottles.push({
+    items.push({
       index: currentIndex++,
       type,
       appear_at_ms: Math.round(timeMs),
       start_x_percent: Math.round(startX),
       velocity_x: Number(drift.toFixed(2)),
-      velocity_y: -1, // normalized upward impulse
+      velocity_y: -1,
       peak_height_percent: Math.round(peak),
-      rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (100 + Math.floor(Math.random() * 100)),
+      rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (100 + Math.floor(Math.random() * 120)),
     });
-    timeMs += 2200 + Math.floor(Math.random() * 500);
+    timeMs += 2000 + Math.floor(Math.random() * 500);
   }
 
-  // Phase 2: 10 - 20s (medium: 1-2 bottles every 1.5-2s, sometimes pairs)
-  // 1 gold, 1 expired (if not first play)
-  let expiredCountPhase2 = 0;
-  let goldCountPhase2 = 0;
-  timeMs = 10500;
-  while (timeMs < 19500) {
-    const isPair = Math.random() < 0.3;
+  // Phase 2: 8 - 18s (RAMP UP: 1-2 fruits every 1.5-2s, sometimes pairs. First bomb around second 12. Faster arcs)
+  let bombCountPhase2 = 0;
+  timeMs = 8500;
+  while (timeMs < 17500) {
+    const isPair = Math.random() < 0.35;
     const count = isPair ? 2 : 1;
+    let hasBombInThisLaunch = false;
 
     for (let i = 0; i < count; i++) {
-      let type: BottleType = 'mango';
-      if (!isFirstPlay && expiredCountPhase2 === 0 && Math.random() < 0.4) {
-        type = 'expired';
-        expiredCountPhase2++;
-      } else if (goldCountPhase2 === 0 && Math.random() < 0.35) {
-        type = 'gold';
-        goldCountPhase2++;
-      } else {
-        type = Math.random() < 0.5 ? 'mango' : 'pineapple';
+      let type: ItemType = Math.random() < 0.5 ? 'mango' : 'pineapple';
+      // First bomb appears around second 12 (never before second 10, never on first play)
+      if (!isFirstPlay && timeMs >= 11000 && bombCountPhase2 === 0 && !hasBombInThisLaunch) {
+        type = 'bomb';
+        bombCountPhase2++;
+        hasBombInThisLaunch = true;
       }
 
       const startX = count === 2 ? (i === 0 ? 25 + Math.random() * 15 : 60 + Math.random() * 15) : 15 + Math.random() * 70;
-      const peak = 30 + Math.random() * 35;
-      const drift = (Math.random() - 0.5) * 25;
+      const peak = 28 + Math.random() * 38;
+      const drift = (Math.random() - 0.5) * 26;
 
-      bottles.push({
+      items.push({
         index: currentIndex++,
         type,
-        appear_at_ms: Math.round(timeMs + i * 180),
+        appear_at_ms: Math.round(timeMs + i * 160),
         start_x_percent: Math.round(startX),
         velocity_x: Number(drift.toFixed(2)),
         velocity_y: -1.1,
         peak_height_percent: Math.round(peak),
-        rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (120 + Math.floor(Math.random() * 120)),
+        rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (120 + Math.floor(Math.random() * 140)),
       });
     }
 
-    timeMs += 1600 + Math.floor(Math.random() * 500);
+    timeMs += 1600 + Math.floor(Math.random() * 450);
   }
 
-  // Phase 3: 20 - 30s (fast: 2-3 bottles every 1-1.5s, fast arcs, more gold & expired)
-  let expiredCountPhase3 = 0;
-  let goldCountPhase3 = 0;
-  timeMs = 20500;
+  // Phase 3: 18 - 30s (INTENSE: 2-3 fruits every 1-1.5s, triple launches, 1-2 more bombs, never 2 bombs at once)
+  let bombCountPhase3 = 0;
+  timeMs = 18500;
   while (timeMs < 28500) {
     const roll = Math.random();
-    const count = roll < 0.35 ? 3 : roll < 0.7 ? 2 : 1;
+    const count = roll < 0.35 ? 3 : roll < 0.75 ? 2 : 1;
+    let hasBombInThisLaunch = false;
 
     for (let i = 0; i < count; i++) {
-      let type: BottleType = 'pineapple';
-      if (!isFirstPlay && expiredCountPhase3 === 0 && Math.random() < 0.45) {
-        type = 'expired';
-        expiredCountPhase3++;
-      } else if (goldCountPhase3 < 2 && Math.random() < 0.3) {
-        type = 'gold';
-        goldCountPhase3++;
-      } else {
-        type = Math.random() < 0.5 ? 'mango' : 'pineapple';
+      let type: ItemType = Math.random() < 0.5 ? 'mango' : 'pineapple';
+      if (!isFirstPlay && bombCountPhase3 < 2 && !hasBombInThisLaunch && Math.random() < 0.4) {
+        type = 'bomb';
+        bombCountPhase3++;
+        hasBombInThisLaunch = true;
       }
 
       const startX =
@@ -101,25 +89,25 @@ function generateSequence(isFirstPlay: boolean): BottleSpawn[] {
             ? 25 + Math.random() * 15
             : 60 + Math.random() * 15
           : 15 + Math.random() * 70;
-      const peak = 28 + Math.random() * 38;
-      const drift = (Math.random() - 0.5) * 30;
+      const peak = 25 + Math.random() * 42;
+      const drift = (Math.random() - 0.5) * 32;
 
-      bottles.push({
+      items.push({
         index: currentIndex++,
         type,
-        appear_at_ms: Math.round(timeMs + i * 150),
+        appear_at_ms: Math.round(timeMs + i * 140),
         start_x_percent: Math.round(startX),
         velocity_x: Number(drift.toFixed(2)),
         velocity_y: -1.2,
         peak_height_percent: Math.round(peak),
-        rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (140 + Math.floor(Math.random() * 140)),
+        rotation_speed: (Math.random() > 0.5 ? 1 : -1) * (140 + Math.floor(Math.random() * 160)),
       });
     }
 
     timeMs += 1200 + Math.floor(Math.random() * 400);
   }
 
-  return bottles;
+  return items;
 }
 
 export async function POST() {
@@ -148,17 +136,28 @@ export async function POST() {
   );
 
   if (completedPlay) {
+    const resObj = completedPlay.result || {};
+    const fruitsSliced = resObj.fruits_sliced ?? resObj.bottles_sliced ?? 0;
+    const totalFruits = resObj.total_fruits ?? resObj.total_bottles ?? resObj.items?.length ?? resObj.bottles?.length ?? 24;
+    const bombsHit = resObj.bombs_hit ?? 0;
+
     return NextResponse.json(
       {
         error: 'Already played today',
         already_played: true,
         next_available: nextAvailable,
         coins_won: completedPlay.coins_won || 0,
-        bottles_sliced: completedPlay.result?.bottles_sliced ?? 0,
-        total_bottles: completedPlay.result?.bottles?.length || 22,
+        fruits_sliced: fruitsSliced,
+        total_fruits: totalFruits,
+        bombs_hit: bombsHit,
+        bottles_sliced: fruitsSliced,
+        total_bottles: totalFruits,
         today_result: {
-          bottles_sliced: completedPlay.result?.bottles_sliced ?? 0,
-          total_bottles: completedPlay.result?.bottles?.length || 22,
+          fruits_sliced: fruitsSliced,
+          total_fruits: totalFruits,
+          bombs_hit: bombsHit,
+          bottles_sliced: fruitsSliced,
+          total_bottles: totalFruits,
           coins_won: completedPlay.coins_won || 0,
         },
       },
@@ -166,7 +165,7 @@ export async function POST() {
     );
   }
 
-  // Check if first ever sip_slice play for this user
+  // 2. Check if first ever sip_slice play for this user
   const { count } = await adminSupabase
     .from('game_plays')
     .select('*', { count: 'exact', head: true })
@@ -176,11 +175,12 @@ export async function POST() {
 
   const isFirstPlay = (count ?? 0) === 0;
 
-  // 2. Generate bottle sequence
-  const bottles = generateSequence(isFirstPlay);
+  // 3. Generate item sequence server-side (~22-28 items)
+  const items = generateSequence(isFirstPlay);
 
   const initialResult = {
-    bottles,
+    items,
+    bottles: items,
     is_first_play: isFirstPlay,
     start_time: new Date().toISOString(),
     is_completed: false,
@@ -203,7 +203,8 @@ export async function POST() {
 
   return NextResponse.json({
     game_id: gamePlay.id,
-    bottles,
+    items,
+    bottles: items,
     is_first_play: isFirstPlay,
   });
 }

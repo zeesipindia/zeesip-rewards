@@ -69,6 +69,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Guest session already claimed' });
     }
 
+    // ONE-TIME CLAIM GUARD: check if user already has ANY entry with source='GUEST_SPIN' in coin_ledger
+    const { count: existingSpins } = await adminSupabase
+      .from('coin_ledger')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('source', 'GUEST_SPIN');
+
+    if ((existingSpins ?? 0) > 0) {
+      await clearGuestSessionCookie();
+      return NextResponse.json({ success: false, message: 'Guest spin reward already claimed for this account' });
+    }
+
     const coinsWon = guestSession.coins_won || 30;
 
     if (coinsWon > 0) {

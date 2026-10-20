@@ -20,56 +20,19 @@ export async function GET(req: NextRequest) {
       const user = session.user;
       const adminSupabase = createAdminClient();
 
-      // Claim guest session if cookie exists
-      try {
-        const guestSessionId = await getGuestSessionIdFromCookies();
-        if (guestSessionId) {
-          const { data: guestSession } = await adminSupabase
-            .from('guest_sessions')
-            .select('*')
-            .eq('id', guestSessionId)
-            .single();
-
-          if (guestSession && !guestSession.claimed_by) {
-            const coinsWon = guestSession.coins_won || 30;
-            if (coinsWon > 0) {
-              await adminSupabase.from('coin_ledger').insert({
-                user_id: user.id,
-                amount: coinsWon,
-                source: 'GUEST_SPIN',
-                description: `Guest spin reward (+${coinsWon} coins)`,
-              });
-
-              await adminSupabase
-                .from('guest_sessions')
-                .update({
-                  claimed_by: user.id,
-                  claimed_at: new Date().toISOString(),
-                })
-                .eq('id', guestSessionId);
-
-              await adminSupabase.from('events').insert({
-                user_id: user.id,
-                event_type: 'COINS_TRANSFERRED',
-                metadata: { guest_session_id: guestSessionId, amount: coinsWon },
-              });
-            }
-            await clearGuestSessionCookie();
-          }
-        }
-      } catch (claimErr) {
-        console.error('[auth/callback] Error claiming guest session:', claimErr);
-      }
-
-      // Check if user has saved phone_number
-      const { data: profile } = await adminSupabase
+      // Check if this Google account already exists in profiles table
+      const { data: existingProfile } = await adminSupabase
         .from('profiles')
-        .select('phone_number')
+        .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (!profile) {
-        // Insert initial basic profile from Google metadata
+      if (existingProfile) {
+        // Returning user: redirect straight to /home. Do NOT look for guest sessions. Do NOT award any coins.
+        await clearGuestSessionCookie();
+        targetRedirect = `${baseUrl}/home`;
+      } else {
+        // Brand new user: insert initial basic profile from Google metadata
         await adminSupabase.from('profiles').insert({
           id: user.id,
           display_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Zee Sipper',
@@ -77,14 +40,56 @@ export async function GET(req: NextRequest) {
           avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         });
 
-        targetRedirect = `${baseUrl}/profile`;
-      } else {
-        const isComplete = Boolean(profile.phone_number);
-        if (!isComplete) {
-          targetRedirect = `${baseUrl}/profile`;
-        } else {
-          targetRedirect = `${baseUrl}/home`;
+        // ONE-TIME CLAIM GUARD: check if user already has ANY entry with source='GUEST_SPIN' in coin_ledger
+        const { count: existingSpins } = await adminSupabase
+          .from('coin_ledger')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('source', 'GUEST_SPIN');
+
+        if ((existingSpins ?? 0) === 0) {
+          try {
+            const guestSessionId = await getGuestSessionIdFromCookies();
+            if (guestSessionId) {
+              const { data: guestSession } = await adminSupabase
+                .from('guest_sessions')
+                .select('*')
+                .eq('id', guestSessionId)
+                .single();
+
+              if (guestSession && !guestSession.claimed_by && !guestSession.claimed_at) {
+                const coinsWon = guestSession.coins_won || 30;
+                if (coinsWon > 0) {
+                  await adminSupabase.from('coin_ledger').insert({
+                    user_id: user.id,
+                    amount: coinsWon,
+                    source: 'GUEST_SPIN',
+                    description: `Guest spin reward (+${coinsWon} coins)`,
+                  });
+
+                  await adminSupabase
+                    .from('guest_sessions')
+                    .update({
+                      claimed_by: user.id,
+                      claimed_at: new Date().toISOString(),
+                    })
+                    .eq('id', guestSessionId);
+
+                  await adminSupabase.from('events').insert({
+                    user_id: user.id,
+                    event_type: 'COINS_TRANSFERRED',
+                    metadata: { guest_session_id: guestSessionId, amount: coinsWon },
+                  });
+                }
+              }
+            }
+          } catch (claimErr) {
+            console.error('[auth/callback] Error claiming guest session:', claimErr);
+          }
         }
+
+        await clearGuestSessionCookie();
+        targetRedirect = `${baseUrl}/profile`;
       }
     }
   }
