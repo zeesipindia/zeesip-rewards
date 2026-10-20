@@ -12,9 +12,9 @@ function generateSequence(isFirstPlay: boolean): ItemSpawn[] {
   let timeMs = 1200;
   while (timeMs < 7500) {
     const type: ItemType = Math.random() < 0.5 ? 'mango' : 'pineapple';
-    const startX = 15 + Math.random() * 70;
-    const peak = 35 + Math.random() * 30; // 35% to 65% from top
-    const drift = (Math.random() - 0.5) * 20;
+    const startX = 20 + Math.random() * 60;
+    const peak = 35 + Math.random() * 25; // 35% to 60% from top
+    const drift = (Math.random() - 0.5) * 14;
 
     items.push({
       index: currentIndex++,
@@ -40,15 +40,15 @@ function generateSequence(isFirstPlay: boolean): ItemSpawn[] {
     for (let i = 0; i < count; i++) {
       let type: ItemType = Math.random() < 0.5 ? 'mango' : 'pineapple';
       // First bomb appears around second 12 (never before second 10, never on first play)
-      if (!isFirstPlay && timeMs >= 11000 && bombCountPhase2 === 0 && !hasBombInThisLaunch) {
+      if (!isFirstPlay && timeMs >= 11500 && bombCountPhase2 === 0 && !hasBombInThisLaunch) {
         type = 'bomb';
         bombCountPhase2++;
         hasBombInThisLaunch = true;
       }
 
-      const startX = count === 2 ? (i === 0 ? 25 + Math.random() * 15 : 60 + Math.random() * 15) : 15 + Math.random() * 70;
-      const peak = 28 + Math.random() * 38;
-      const drift = (Math.random() - 0.5) * 26;
+      const startX = count === 2 ? (i === 0 ? 25 + Math.random() * 15 : 60 + Math.random() * 15) : 20 + Math.random() * 60;
+      const peak = 30 + Math.random() * 30;
+      const drift = (Math.random() - 0.5) * 18;
 
       items.push({
         index: currentIndex++,
@@ -83,14 +83,14 @@ function generateSequence(isFirstPlay: boolean): ItemSpawn[] {
 
       const startX =
         count === 3
-          ? 20 + i * 28 + (Math.random() - 0.5) * 10
+          ? 20 + i * 28 + (Math.random() - 0.5) * 8
           : count === 2
           ? i === 0
             ? 25 + Math.random() * 15
             : 60 + Math.random() * 15
-          : 15 + Math.random() * 70;
-      const peak = 25 + Math.random() * 42;
-      const drift = (Math.random() - 0.5) * 32;
+          : 20 + Math.random() * 60;
+      const peak = 28 + Math.random() * 34;
+      const drift = (Math.random() - 0.5) * 20;
 
       items.push({
         index: currentIndex++,

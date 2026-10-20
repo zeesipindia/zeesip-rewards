@@ -7,6 +7,7 @@ import { CoinIcon } from '@/components/CoinIcon';
 import { createClient } from '@/lib/supabase/client';
 import { ItemType, ItemSpawn } from '@/lib/bottleTypes';
 import {
+  getAudioContext,
   initAudioContext,
   playFruitSwoosh,
   playFruitSliceHit,
@@ -34,6 +35,7 @@ interface ActiveItem {
   rotation: number;
   isSliced: boolean;
   isRemoved: boolean;
+  isActive: boolean;
 }
 
 interface ItemHalf {
@@ -48,10 +50,13 @@ interface ItemHalf {
   rot: number;
   rotSpeed: number;
   createdAt: number;
+  active: boolean;
+  opacity: number;
 }
 
 interface JuiceDroplet {
-  id: string;
+  id: number;
+  active: boolean;
   x: number;
   y: number;
   size: number;
@@ -61,10 +66,12 @@ interface JuiceDroplet {
   vx: number;
   vy: number;
   createdAt: number;
+  opacity: number;
 }
 
 interface JuiceSplat {
-  id: string;
+  id: number;
+  active: boolean;
   x: number;
   y: number;
   size: number;
@@ -72,23 +79,29 @@ interface JuiceSplat {
   borderRadius: string;
   rotation: number;
   createdAt: number;
+  opacity: number;
 }
 
 interface ScorePop {
-  id: string;
+  id: number;
+  active: boolean;
   x: number;
   y: number;
   text: string;
   color: string;
   fontSize: number;
   createdAt: number;
+  opacity: number;
 }
 
 interface BombExplosionEffect {
-  id: string;
+  id: number;
+  active: boolean;
   x: number;
   y: number;
   createdAt: number;
+  scale: number;
+  opacity: number;
 }
 
 interface TrailPoint {
@@ -138,7 +151,7 @@ function FruitGraphic({
           xmlns="http://www.w3.org/2000/svg"
           className="overflow-visible"
         >
-          {/* Spiky Green Crown (5-7 spikes) */}
+          {/* Spiky Green Crown */}
           <g>
             <polygon points="25,2 20,18 25,15 30,18" fill="#1B5E20" />
             <polygon points="17,6 15,20 22,17" fill="#2E7D32" />
@@ -198,87 +211,108 @@ function FruitGraphic({
           <path d="M 24 10 C 23 5, 27 2, 28 0" stroke="#5D4037" strokeWidth="2" strokeLinecap="round" />
           <path d="M 26 5 C 32 4, 34 8, 32 10 C 29 11, 27 8, 26 5 Z" fill="#4CAF50" />
 
-          {/* Curved Raw Green Mango Body */}
+          {/* Kidney Kidney Bean / Mango Silhouette */}
           <path
-            d="M 25 8 C 38 8, 46 22, 44 38 C 42 50, 32 58, 22 58 C 12 58, 6 48, 8 34 C 10 20, 16 8, 25 8 Z"
-            fill="url(#mangoGrad)"
-            stroke="#558B2F"
+            d="M 25 10 C 14 10, 8 20, 8 34 C 8 48, 16 58, 26 58 C 36 58, 42 48, 42 36 C 42 22, 36 10, 25 10 Z"
+            fill="#8BC34A"
+            stroke="#689F38"
             strokeWidth="1.5"
           />
 
-          <defs>
-            <linearGradient id="mangoGrad" x1="10" y1="12" x2="42" y2="52" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#9CCC65" />
-              <stop offset="60%" stopColor="#8BC34A" />
-              <stop offset="100%" stopColor="#689F38" />
-            </linearGradient>
-          </defs>
+          {/* Golden Yellow Sun Blush */}
+          <path
+            d="M 25 12 C 18 12, 12 21, 12 32 C 12 42, 17 50, 23 52 C 20 42, 20 25, 25 12 Z"
+            fill="#FFEB3B"
+            opacity="0.65"
+          />
 
-          {/* Inside flesh when sliced */}
+          {/* Subtle curved highlight */}
+          <path
+            d="M 34 22 C 37 28, 37 38, 34 44"
+            stroke="#DCEDC8"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            opacity="0.75"
+          />
+
+          {/* If sliced, show juicy yellow-orange interior and seed outline */}
           {clipSide && (
             <path
-              d="M 25 14 C 35 14, 40 24, 38 37 C 36 46, 29 52, 22 52 C 14 52, 10 44, 12 33 C 14 22, 18 14, 25 14 Z"
-              fill="#E8F5E9"
-              stroke="#C8E6C9"
+              d="M 25 14 C 17 14, 12 22, 12 34 C 12 45, 18 53, 26 53 C 33 53, 38 45, 38 35 C 38 24, 33 14, 25 14 Z"
+              fill="#FFD54F"
+              stroke="#FFCA28"
               strokeWidth="2"
             />
           )}
           {clipSide && (
-            <ellipse cx="24" cy="34" rx="5" ry="10" fill="#FFFFFF" opacity="0.9" />
+            <ellipse cx="25" cy="35" rx="5" ry="10" fill="#FFF8E1" stroke="#FFE082" strokeWidth="1" />
           )}
         </svg>
       </div>
     );
   }
 
-  // Classic Round Black Bomb
+  // Classic Cartoon Bomb
   return (
-    <div className="relative w-[56px] h-[66px] select-none pointer-events-none">
+    <div
+      className="relative w-[50px] h-[50px] select-none pointer-events-none"
+      style={{
+        clipPath:
+          clipSide === 'left'
+            ? 'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)'
+            : clipSide === 'right'
+            ? 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)'
+            : undefined,
+      }}
+    >
       <svg
-        width="56"
-        height="66"
-        viewBox="0 0 56 66"
+        width="50"
+        height="50"
+        viewBox="0 0 50 50"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="overflow-visible"
       >
-        {/* Animated Flickering Flame at Fuse Tip */}
-        <circle cx="36" cy="6" r="4.5" className="animate-ping" fill="#FF4500" opacity="0.8" />
-        <circle cx="36" cy="6" r="3" fill="#FFD700" />
+        {/* Burning Fuse */}
+        <path d="M 25 12 Q 33 8, 38 3" stroke="#8D6E63" strokeWidth="2.5" fill="none" strokeLinecap="round" />
 
-        {/* Curved Fuse */}
-        <path d="M 28 17 C 29 11, 33 9, 36 6" stroke="#8D6E63" strokeWidth="2.5" strokeLinecap="round" />
+        {/* Animated Golden Spark on Fuse */}
+        <circle cx="38" cy="3" r="4.5" fill="#FFEB3B" className="animate-ping" />
+        <circle cx="38" cy="3" r="2.5" fill="#FF5722" />
+        <circle cx="38" cy="3" r="1.2" fill="#FFFFFF" />
 
-        {/* Bomb Cap Neck */}
-        <rect x="23" y="16" width="10" height="5" rx="1.5" fill="#37474F" />
+        {/* Cylindrical Fuse Cap Neck */}
+        <rect x="21" y="9" width="8" height="4" rx="1.5" fill="#424242" stroke="#212121" strokeWidth="1" />
 
-        {/* Round Metallic Charcoal Bomb Body */}
-        <circle cx="28" cy="40" r="23" fill="url(#bombGrad)" stroke="#111111" strokeWidth="1.5" />
+        {/* Spherical Black Bomb Body with 3D Radial Highlight */}
+        <circle cx="25" cy="28" r="18" fill="#1A1A1A" stroke="#000000" strokeWidth="1.5" />
 
-        {/* Subtle Metallic Highlight Reflection */}
-        <ellipse cx="21" cy="31" rx="5" ry="3" fill="white" opacity="0.3" transform="rotate(-30 21 31)" />
+        {/* Glossy White Specular Highlight */}
+        <ellipse cx="21" cy="21" rx="5" ry="3" fill="white" opacity="0.4" transform="rotate(-30 21 21)" />
 
-        <defs>
-          <radialGradient id="bombGrad" cx="35%" cy="32%" r="65%">
-            <stop offset="0%" stopColor="#455A64" />
-            <stop offset="45%" stopColor="#263238" />
-            <stop offset="100%" stopColor="#101416" />
-          </radialGradient>
-        </defs>
+        {/* Danger Skull & Bones Icon or Warning Glyph */}
+        <circle cx="25" cy="29" r="6" fill="#D32F2F" opacity="0.8" />
+        <path d="M 23 27 L 27 31 M 27 27 L 23 31" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+
+        {/* If sliced bomb half, interior is dark glowing coal */}
+        {clipSide && (
+          <circle cx="25" cy="28" r="14" fill="#3E2723" stroke="#D84315" strokeWidth="1.5" />
+        )}
       </svg>
-
-      {/* Drifting smoke wisps */}
-      <div className="absolute top-0 right-2 w-2 h-2 rounded-full bg-gray-400/50 animate-pulse" />
-      <div className="absolute -top-2 right-4 w-1.5 h-1.5 rounded-full bg-gray-300/40 animate-ping" />
     </div>
   );
 }
 
+// Fixed Pool Sizes to Prevent Garbage Collection
+const MAX_DROPLETS = 35;
+const MAX_SPLATS = 20;
+const MAX_SCORE_POPS = 10;
+const MAX_EXPLOSIONS = 3;
+
 export default function SipSlicePage() {
   const router = useRouter();
 
-  // Screen & Orientation States
-  const [isPortrait, setIsPortrait] = useState(false);
+  // Screen & Game States
   const [gameState, setGameState] = useState<GameState>('loading');
   const [countdownNum, setCountdownNum] = useState<number | string>(3);
   const [timeLeft, setTimeLeft] = useState(30);
@@ -320,11 +354,11 @@ export default function SipSlicePage() {
   const gameIdRef = useRef<string | null>(null);
   const itemSpawnsRef = useRef<ItemSpawn[]>([]);
   const activeItemsRef = useRef<ActiveItem[]>([]);
-  const itemHalvesRef = useRef<ItemHalf[]>([]);
-  const juiceDropletsRef = useRef<JuiceDroplet[]>([]);
-  const juiceSplatsRef = useRef<JuiceSplat[]>([]);
-  const scorePopsRef = useRef<ScorePop[]>([]);
-  const bombExplosionsRef = useRef<BombExplosionEffect[]>([]);
+  const itemHalvesPoolRef = useRef<ItemHalf[]>([]);
+  const juiceDropletsPoolRef = useRef<JuiceDroplet[]>([]);
+  const juiceSplatsPoolRef = useRef<JuiceSplat[]>([]);
+  const scorePopsPoolRef = useRef<ScorePop[]>([]);
+  const bombExplosionsPoolRef = useRef<BombExplosionEffect[]>([]);
   const slicedIndicesRef = useRef<number[]>([]);
   const bombsHitIndicesRef = useRef<number[]>([]);
 
@@ -345,35 +379,82 @@ export default function SipSlicePage() {
   const lastFrameTimeRef = useRef(0);
   const lastTickSecondRef = useRef(30);
 
-  // Re-render tick for visual sync
+  // Visual Sync Tick
   const [, setVisualTick] = useState(0);
 
   // -------------------------------------------------------------
-  // 1. ORIENTATION & RESIZE HANDLING
+  // 1. INITIALIZE PRE-ALLOCATED POOLS
   // -------------------------------------------------------------
   useEffect(() => {
-    const checkOrientation = () => {
-      const portrait = window.innerHeight > window.innerWidth;
-      setIsPortrait(portrait);
-    };
-
-    checkOrientation();
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
-
-    // Try Fullscreen API & Screen Orientation Lock if available
-    if (typeof screen !== 'undefined' && 'orientation' in screen && 'lock' in screen.orientation) {
-      try {
-        (screen.orientation as { lock: (mode: string) => Promise<void> })
-          .lock('landscape')
-          .catch(() => {});
-      } catch {}
+    // Droplets Pool
+    const droplets: JuiceDroplet[] = [];
+    for (let i = 0; i < MAX_DROPLETS; i++) {
+      droplets.push({
+        id: i,
+        active: false,
+        x: 0,
+        y: 0,
+        size: 8,
+        color: '#FFD700',
+        lightColor: '#FFF176',
+        darkColor: '#F57F17',
+        vx: 0,
+        vy: 0,
+        createdAt: 0,
+        opacity: 1,
+      });
     }
+    juiceDropletsPoolRef.current = droplets;
 
-    return () => {
-      window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
-    };
+    // Splats Pool
+    const splats: JuiceSplat[] = [];
+    for (let i = 0; i < MAX_SPLATS; i++) {
+      splats.push({
+        id: i,
+        active: false,
+        x: 0,
+        y: 0,
+        size: 55,
+        color: '#FFD700',
+        borderRadius: '50%',
+        rotation: 0,
+        createdAt: 0,
+        opacity: 1,
+      });
+    }
+    juiceSplatsPoolRef.current = splats;
+
+    // Score Pops Pool
+    const pops: ScorePop[] = [];
+    for (let i = 0; i < MAX_SCORE_POPS; i++) {
+      pops.push({
+        id: i,
+        active: false,
+        x: 0,
+        y: 0,
+        text: '+1',
+        color: '#FFD700',
+        fontSize: 32,
+        createdAt: 0,
+        opacity: 1,
+      });
+    }
+    scorePopsPoolRef.current = pops;
+
+    // Bomb Explosions Pool
+    const explosions: BombExplosionEffect[] = [];
+    for (let i = 0; i < MAX_EXPLOSIONS; i++) {
+      explosions.push({
+        id: i,
+        active: false,
+        x: 0,
+        y: 0,
+        createdAt: 0,
+        scale: 0.1,
+        opacity: 1,
+      });
+    }
+    bombExplosionsPoolRef.current = explosions;
   }, []);
 
   // -------------------------------------------------------------
@@ -453,27 +534,167 @@ export default function SipSlicePage() {
   }, [router]);
 
   // -------------------------------------------------------------
-  // 5. CANVAS RESIZING
+  // 5. CANVAS RESIZING & RETINA DPR SCALING
   // -------------------------------------------------------------
-  useEffect(() => {
+  const updateCanvasSize = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    const ctx = canvas.getContext('2d', { willReadFrequently: false });
+    ctx?.scale(dpr, dpr);
+  }, []);
 
-    const updateCanvasSize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
+  useEffect(() => {
     updateCanvasSize();
     window.addEventListener('resize', updateCanvasSize);
     return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [gameState]);
+  }, [updateCanvasSize, gameState]);
 
   // -------------------------------------------------------------
-  // 6. START GAME SESSION (API CALL & 3-2-1 COUNTDOWN)
+  // 6. COMPLETE GAME
+  // -------------------------------------------------------------
+  const completeGame = useCallback(async () => {
+    if (gameState === 'result') return;
+
+    const gameId = gameIdRef.current;
+    const sliced = [...slicedIndicesRef.current];
+    const bombs = [...bombsHitIndicesRef.current];
+
+    try {
+      const res = await fetch('/api/games/sip-slice/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game_id: gameId,
+          sliced_indices: sliced,
+          bombs_hit_indices: bombs,
+          ended_at_ms: Math.round(performance.now() - gameStartTimeRef.current),
+        }),
+      });
+
+      const data = await res.json();
+      setResultData({
+        coinsWon: data.coins_won ?? Math.max(1, score),
+        fruitsSliced: data.fruits_sliced ?? sliced.filter((i) => !bombs.includes(i)).length,
+        totalFruits: data.total_fruits ?? itemSpawnsRef.current.filter((i) => i.type !== 'bomb').length,
+        bombsHit: data.bombs_hit ?? bombs.length,
+        newBalance: data.new_balance ?? 0,
+      });
+    } catch {
+      setResultData({
+        coinsWon: Math.max(1, score),
+        fruitsSliced: sliced.filter((i) => !bombs.includes(i)).length,
+        totalFruits: itemSpawnsRef.current.filter((i) => i.type !== 'bomb').length || 24,
+        bombsHit: bombs.length,
+        newBalance: 0,
+      });
+    }
+
+    setGameState('result');
+  }, [gameState, score]);
+
+  // -------------------------------------------------------------
+  // 7. START ACTIVE GAMEPLAY (INITIALIZE PHYSICS OBJECTS & POOLS)
+  // -------------------------------------------------------------
+  const startActiveGameplay = () => {
+    setGameState('playing');
+    const now = performance.now();
+    gameStartTimeRef.current = now;
+    pausedTimeElapsedRef.current = 0;
+    lastFrameTimeRef.current = now;
+    lastTickSecondRef.current = 30;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    // Pre-create pooled active items from sequence
+    activeItemsRef.current = itemSpawnsRef.current.map((sp) => {
+      const startX = (sp.start_x_percent / 100) * width;
+      const startY = height + 90; // Below bottom edge
+      const peakY = (sp.peak_height_percent / 100) * height; // 30% to 70% from top
+      const flightDuration = 2.2;
+      const tPeak = flightDuration / 2;
+
+      const gravity = (2 * (startY - peakY)) / (tPeak * tPeak);
+      const vy0 = -gravity * tPeak;
+      const vx = (sp.velocity_x / 100) * width;
+
+      return {
+        index: sp.index,
+        type: sp.type,
+        appearAtMs: sp.appear_at_ms,
+        startX,
+        startY,
+        peakY,
+        vx,
+        vy0,
+        gravity,
+        rotSpeed: sp.rotation_speed,
+        initialRot: (Math.random() - 0.5) * 50,
+        flightDuration,
+        x: startX,
+        y: startY,
+        rotation: 0,
+        isSliced: false,
+        isRemoved: false,
+        isActive: false,
+      };
+    });
+
+    // Pre-create halves pool (2 halves per item index)
+    const halves: ItemHalf[] = [];
+    itemSpawnsRef.current.forEach((sp) => {
+      halves.push({
+        id: `half-${sp.index}-left`,
+        type: sp.type,
+        x: 0,
+        y: 0,
+        side: 'left',
+        sliceAngle: 0,
+        vx: 0,
+        vy: 0,
+        rot: 0,
+        rotSpeed: 0,
+        createdAt: 0,
+        active: false,
+        opacity: 1,
+      });
+      halves.push({
+        id: `half-${sp.index}-right`,
+        type: sp.type,
+        x: 0,
+        y: 0,
+        side: 'right',
+        sliceAngle: 0,
+        vx: 0,
+        vy: 0,
+        rot: 0,
+        rotSpeed: 0,
+        createdAt: 0,
+        active: false,
+        opacity: 1,
+      });
+    });
+    itemHalvesPoolRef.current = halves;
+
+    // Reset droplet and splat pools
+    juiceDropletsPoolRef.current.forEach((d) => (d.active = false));
+    juiceSplatsPoolRef.current.forEach((s) => (s.active = false));
+    scorePopsPoolRef.current.forEach((p) => (p.active = false));
+    bombExplosionsPoolRef.current.forEach((b) => (b.active = false));
+  };
+
+  // -------------------------------------------------------------
+  // 8. START GAME SESSION (API CALL & 3-2-1 COUNTDOWN)
   // -------------------------------------------------------------
   const handleStartGame = async () => {
-    initAudioContext();
+    // 1. Safari Web Audio unlock: MUST be awaited inside user gesture onClick!
+    try {
+      await initAudioContext();
+    } catch {}
+
     setGameState('loading');
 
     try {
@@ -502,12 +723,6 @@ export default function SipSlicePage() {
 
       gameIdRef.current = data.game_id;
       itemSpawnsRef.current = data.items || data.bottles || [];
-      activeItemsRef.current = [];
-      itemHalvesRef.current = [];
-      juiceDropletsRef.current = [];
-      juiceSplatsRef.current = [];
-      scorePopsRef.current = [];
-      bombExplosionsRef.current = [];
       slicedIndicesRef.current = [];
       bombsHitIndicesRef.current = [];
       setScore(0);
@@ -542,101 +757,14 @@ export default function SipSlicePage() {
   };
 
   // -------------------------------------------------------------
-  // 7. START ACTIVE GAMEPLAY (INITIALIZE PHYSICS OBJECTS)
-  // -------------------------------------------------------------
-  const startActiveGameplay = () => {
-    setGameState('playing');
-    const now = performance.now();
-    gameStartTimeRef.current = now;
-    pausedTimeElapsedRef.current = 0;
-    lastFrameTimeRef.current = now;
-    lastTickSecondRef.current = 30;
-
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    activeItemsRef.current = itemSpawnsRef.current.map((sp) => {
-      const startX = (sp.start_x_percent / 100) * width;
-      const startY = height + 85;
-      const peakY = (sp.peak_height_percent / 100) * height; // 25% to 70% from top
-      const flightDuration = 2.2;
-      const tPeak = flightDuration / 2;
-
-      const gravity = (2 * (startY - peakY)) / (tPeak * tPeak);
-      const vy0 = -gravity * tPeak;
-      const vx = (sp.velocity_x / 100) * width;
-
-      return {
-        index: sp.index,
-        type: sp.type,
-        appearAtMs: sp.appear_at_ms,
-        startX,
-        startY,
-        peakY,
-        vx,
-        vy0,
-        gravity,
-        rotSpeed: sp.rotation_speed,
-        initialRot: (Math.random() - 0.5) * 60,
-        flightDuration,
-        x: startX,
-        y: startY,
-        rotation: 0,
-        isSliced: false,
-        isRemoved: false,
-      };
-    });
-  };
-
-  // -------------------------------------------------------------
-  // 8. COMPLETE GAME
-  // -------------------------------------------------------------
-  const completeGame = useCallback(async () => {
-    if (gameState === 'result') return;
-
-    const gameId = gameIdRef.current;
-    const sliced = [...slicedIndicesRef.current];
-    const bombs = [...bombsHitIndicesRef.current];
-
-    try {
-      const res = await fetch('/api/games/sip-slice/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game_id: gameId,
-          sliced_indices: sliced,
-          bombs_hit_indices: bombs,
-          ended_at_ms: Math.round(performance.now() - gameStartTimeRef.current),
-        }),
-      });
-
-      const data = await res.json();
-      setResultData({
-        coinsWon: data.coins_won ?? Math.max(1, score),
-        fruitsSliced: data.fruits_sliced ?? sliced.filter((i) => !bombs.includes(i)).length,
-        totalFruits: data.total_fruits ?? itemSpawnsRef.current.filter((i) => i.type !== 'bomb').length,
-        bombsHit: data.bombs_hit ?? bombs.length,
-        newBalance: data.new_balance ?? 0,
-      });
-    } catch {
-      setResultData({
-        coinsWon: Math.max(1, score),
-        fruitsSliced: sliced.filter((i) => !bombs.includes(i)).length,
-        totalFruits: itemSpawnsRef.current.filter((i) => i.type !== 'bomb').length || 22,
-        bombsHit: bombs.length,
-        newBalance: 0,
-      });
-    }
-
-    setGameState('result');
-  }, [gameState, score]);
-
-  // -------------------------------------------------------------
-  // 9. SLICE LOGIC & VISUAL ANIMATION
+  // 9. SLICE LOGIC & VISUAL ANIMATIONS
   // -------------------------------------------------------------
   const sliceItem = useCallback((item: ActiveItem, sliceX: number, sliceY: number, angleRad: number) => {
     item.isSliced = true;
+    item.isActive = false;
     slicedIndicesRef.current.push(item.index);
+
+    const now = performance.now();
 
     if (item.type === 'bomb') {
       // BOMB SLICED: -10 coins, screen shake, red flash, explosion
@@ -645,209 +773,308 @@ export default function SipSlicePage() {
 
       playBombExplosion();
 
-      // Screen shake (translateX back and forth 3 times, 50ms each)
+      // Screen shake (300ms)
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 300);
 
-      // Dark red screen flash (full screen overlay, rgba(180,0,0,0.4), 300ms)
+      // Dark red screen flash (300ms)
       setIsScreenRed(true);
       setTimeout(() => setIsScreenRed(false), 300);
 
-      // Bomb explosion effect at slice point
-      bombExplosionsRef.current.push({
-        id: `bomb_${item.index}_${Date.now()}`,
-        x: sliceX,
-        y: sliceY,
-        createdAt: performance.now(),
-      });
+      // Spawn bomb explosion effect from pool
+      const explosion = bombExplosionsPoolRef.current.find((b) => !b.active);
+      if (explosion) {
+        explosion.active = true;
+        explosion.x = sliceX;
+        explosion.y = sliceY;
+        explosion.createdAt = now;
+        explosion.scale = 0.2;
+        explosion.opacity = 1;
+      }
 
-      // Score pop-up: "-10" text in RED (48px Anton)
-      scorePopsRef.current.push({
-        id: `pop_${item.index}_${Date.now()}`,
-        x: sliceX,
-        y: sliceY,
-        text: '-10',
-        color: '#FF2222',
-        fontSize: 48,
-        createdAt: performance.now(),
-      });
-
+      // Score pop: "-10"
+      const scorePop = scorePopsPoolRef.current.find((p) => !p.active);
+      if (scorePop) {
+        scorePop.active = true;
+        scorePop.x = sliceX;
+        scorePop.y = sliceY - 15;
+        scorePop.text = '−10';
+        scorePop.color = '#FF3B30';
+        scorePop.fontSize = 34;
+        scorePop.createdAt = now;
+        scorePop.opacity = 1;
+      }
       return;
     }
 
-    // FRUIT SLICED: Pineapple or Mango (+1 coin)
-    setScore((prev) => prev + 1);
-
+    // FRUIT SLICED (Pineapple or Mango)
     playFruitSliceHit();
-    playFruitJuiceSplash();
+    setTimeout(() => {
+      playFruitJuiceSplash();
+    }, 25);
 
-    // Pop-up "+1" in white bold 28px
-    scorePopsRef.current.push({
-      id: `pop_${item.index}_${Date.now()}`,
-      x: sliceX,
-      y: sliceY,
-      text: '+1',
-      color: '#FFFFFF',
-      fontSize: 28,
-      createdAt: performance.now(),
-    });
-
-    // Combo Tracking (2+ fruits in one swipe)
-    const now = performance.now();
-    if (now - lastSliceTimeRef.current < 250) {
-      currentSwipeSlicedCountRef.current += 1;
-    } else {
-      currentSwipeSlicedCountRef.current = 1;
-    }
+    // Track combo in swipe
+    currentSwipeSlicedCountRef.current += 1;
+    const currentCombo = currentSwipeSlicedCountRef.current;
     lastSliceTimeRef.current = now;
 
-    if (currentSwipeSlicedCountRef.current >= 2) {
+    let pointsToAdd = 1;
+    if (currentCombo >= 2) {
+      pointsToAdd = currentCombo; // +2 for double, +3 for triple
       playComboBonus();
-      setComboBanner({
-        count: currentSwipeSlicedCountRef.current,
-        id: Date.now(),
-      });
+      setComboBanner({ count: currentCombo, id: now });
+      setTimeout(() => {
+        setComboBanner((prev) => (prev?.id === now ? null : prev));
+      }, 750);
     }
 
-    // A. Fruit Splits in Two Halves
-    const cutAngleDeg = (angleRad * 180) / Math.PI;
-    itemHalvesRef.current.push({
-      id: `half_l_${item.index}_${Date.now()}`,
-      type: item.type,
-      x: item.x,
-      y: item.y,
-      side: 'left',
-      sliceAngle: cutAngleDeg,
-      vx: -140 - Math.random() * 50,
-      vy: -80 - Math.random() * 60,
-      rot: item.rotation,
-      rotSpeed: -220 - Math.random() * 120,
-      createdAt: performance.now(),
-    });
+    setScore((prev) => prev + pointsToAdd);
 
-    itemHalvesRef.current.push({
-      id: `half_r_${item.index}_${Date.now()}`,
-      type: item.type,
-      x: item.x,
-      y: item.y,
-      side: 'right',
-      sliceAngle: cutAngleDeg,
-      vx: 140 + Math.random() * 50,
-      vy: -80 - Math.random() * 60,
-      rot: item.rotation,
-      rotSpeed: 220 + Math.random() * 120,
-      createdAt: performance.now(),
-    });
+    // Fruit Colors
+    const isPineapple = item.type === 'pineapple';
+    const mainColor = isPineapple ? '#FFD700' : '#8BC34A';
+    const lightColor = isPineapple ? '#FFF176' : '#CDEE1C';
+    const darkColor = isPineapple ? '#F57F17' : '#558B2F';
 
-    // B. Juice Splat on Background (~80-120px)
-    const splatColor =
-      item.type === 'mango' ? 'rgba(205, 238, 28, 0.78)' : 'rgba(255, 225, 77, 0.82)';
+    // 1. Activate Two Halves from Pool
+    const leftHalf = itemHalvesPoolRef.current.find(
+      (h) => h.id === `half-${item.index}-left`
+    );
+    const rightHalf = itemHalvesPoolRef.current.find(
+      (h) => h.id === `half-${item.index}-right`
+    );
 
-    const r1 = 35 + Math.floor(Math.random() * 30);
-    const r2 = 35 + Math.floor(Math.random() * 30);
-    const r3 = 35 + Math.floor(Math.random() * 30);
-    const r4 = 35 + Math.floor(Math.random() * 30);
-    const r5 = 35 + Math.floor(Math.random() * 30);
-    const r6 = 35 + Math.floor(Math.random() * 30);
-    const r7 = 35 + Math.floor(Math.random() * 30);
-    const r8 = 35 + Math.floor(Math.random() * 30);
+    const normalAngle = angleRad + Math.PI / 2;
+    const separationSpeed = 220;
+    const nx = Math.cos(normalAngle);
+    const ny = Math.sin(normalAngle);
 
-    juiceSplatsRef.current.push({
-      id: `splat_${item.index}_${Date.now()}`,
-      x: sliceX,
-      y: sliceY,
-      size: 85 + Math.random() * 35,
-      color: splatColor,
-      borderRadius: `${r1}% ${r2}% ${r3}% ${r4}% / ${r5}% ${r6}% ${r7}% ${r8}%`,
-      rotation: Math.random() * 360,
-      createdAt: performance.now(),
-    });
+    if (leftHalf) {
+      leftHalf.active = true;
+      leftHalf.x = item.x;
+      leftHalf.y = item.y;
+      leftHalf.vx = item.vx - nx * separationSpeed;
+      leftHalf.vy = item.vy0 * 0.3 - ny * separationSpeed;
+      leftHalf.rot = item.rotation;
+      leftHalf.rotSpeed = item.rotSpeed - 240;
+      leftHalf.sliceAngle = angleRad;
+      leftHalf.createdAt = now;
+      leftHalf.opacity = 1;
+    }
 
-    // C. 3D Juice Droplets (12-18 small spheres)
-    const dropletCount = 14 + Math.floor(Math.random() * 4);
-    const baseColor = item.type === 'mango' ? '#CDEE1C' : '#FFE14D';
-    const lightColor = item.type === 'mango' ? '#F4FFBD' : '#FFF9C4';
-    const darkColor = item.type === 'mango' ? '#8FC31F' : '#F5B800';
+    if (rightHalf) {
+      rightHalf.active = true;
+      rightHalf.x = item.x;
+      rightHalf.y = item.y;
+      rightHalf.vx = item.vx + nx * separationSpeed;
+      rightHalf.vy = item.vy0 * 0.3 + ny * separationSpeed;
+      rightHalf.rot = item.rotation;
+      rightHalf.rotSpeed = item.rotSpeed + 240;
+      rightHalf.sliceAngle = angleRad;
+      rightHalf.createdAt = now;
+      rightHalf.opacity = 1;
+    }
 
-    for (let i = 0; i < dropletCount; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 160 + Math.random() * 260;
-      juiceDropletsRef.current.push({
-        id: `drop_${item.index}_${i}_${Date.now()}`,
-        x: sliceX,
-        y: sliceY,
-        size: 5 + Math.random() * 6,
-        color: baseColor,
-        lightColor,
-        darkColor,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 60,
-        createdAt: performance.now(),
-      });
+    // 2. Activate Juice Droplets from Pool (6 droplets)
+    const availableDroplets = juiceDropletsPoolRef.current.filter((d) => !d.active);
+    for (let i = 0; i < Math.min(6, availableDroplets.length); i++) {
+      const drop = availableDroplets[i];
+      const dropAngle = Math.random() * Math.PI * 2;
+      const speed = 120 + Math.random() * 260;
+
+      drop.active = true;
+      drop.x = sliceX;
+      drop.y = sliceY;
+      drop.size = 6 + Math.random() * 8;
+      drop.color = mainColor;
+      drop.lightColor = lightColor;
+      drop.darkColor = darkColor;
+      drop.vx = Math.cos(dropAngle) * speed;
+      drop.vy = Math.sin(dropAngle) * speed - 60;
+      drop.createdAt = now;
+      drop.opacity = 1;
+    }
+
+    // 3. Activate Juice Splat on Board from Pool
+    const splat = juiceSplatsPoolRef.current.find((s) => !s.active);
+    if (splat) {
+      splat.active = true;
+      splat.x = sliceX;
+      splat.y = sliceY;
+      splat.size = 50 + Math.random() * 25;
+      splat.color = mainColor;
+      splat.rotation = Math.random() * 360;
+      splat.borderRadius = `${40 + Math.random() * 20}% ${35 + Math.random() * 25}% ${
+        45 + Math.random() * 20
+      }% ${35 + Math.random() * 25}%`;
+      splat.createdAt = now;
+      splat.opacity = 1;
+    }
+
+    // 4. Activate Score Pop-up from Pool
+    const scorePop = scorePopsPoolRef.current.find((p) => !p.active);
+    if (scorePop) {
+      scorePop.active = true;
+      scorePop.x = sliceX;
+      scorePop.y = sliceY - 10;
+      scorePop.text = pointsToAdd > 1 ? `+${pointsToAdd} COMBO!` : '+1';
+      scorePop.color = pointsToAdd > 1 ? '#FFE14D' : '#FFFFFF';
+      scorePop.fontSize = pointsToAdd > 1 ? 32 : 26;
+      scorePop.createdAt = now;
+      scorePop.opacity = 1;
     }
   }, []);
 
   // -------------------------------------------------------------
-  // 10. HIT DETECTION ON POINTER MOVE (Circle-Line-Segment Math)
+  // 10. POINTER MOVEMENT & SWIPE DETECTION
   // -------------------------------------------------------------
   const handlePointerMovement = useCallback(
-    (clientX: number, clientY: number) => {
+    (x: number, y: number) => {
       if (gameState !== 'playing') return;
 
       const now = performance.now();
-      trailPointsRef.current.push({ x: clientX, y: clientY, time: now });
+      trailPointsRef.current.push({ x, y, time: now });
 
-      // Calculate swipe velocity to play swoosh only when moving fast enough
-      if (lastPointerPosRef.current) {
-        const dX = clientX - lastPointerPosRef.current.x;
-        const dY = clientY - lastPointerPosRef.current.y;
-        const dist = Math.sqrt(dX * dX + dY * dY);
+      const lastPos = lastPointerPosRef.current;
+      if (lastPos) {
+        const dx = x - lastPos.x;
+        const dy = y - lastPos.y;
+        const dist = Math.hypot(dx, dy);
 
-        if (dist > 18 && now - lastSwooshTimeRef.current > 110) {
+        // Blade swoosh sound throttle (every 140ms when fast swipe)
+        if (dist > 28 && now - lastSwooshTimeRef.current > 140) {
           playFruitSwoosh();
           lastSwooshTimeRef.current = now;
         }
+
+        const angle = Math.atan2(dy, dx);
+
+        // Check intersection with all active flying items
+        activeItemsRef.current.forEach((item) => {
+          if (item.isSliced || item.isRemoved || !item.isActive) return;
+
+          // Item center (pineapple: 25, 37.5; mango: 25, 30; bomb: 25, 25)
+          const cx = item.x + 25;
+          const cy = item.y + (item.type === 'pineapple' ? 38 : item.type === 'mango' ? 30 : 25);
+          const hitRadius = item.type === 'bomb' ? 30 : 38;
+
+          // Line segment to point distance
+          const l2 = dist * dist;
+          let t = l2 === 0 ? 0 : ((cx - lastPos.x) * dx + (cy - lastPos.y) * dy) / l2;
+          t = Math.max(0, Math.min(1, t));
+
+          const projX = lastPos.x + t * dx;
+          const projY = lastPos.y + t * dy;
+          const dToSegment = Math.hypot(cx - projX, cy - projY);
+
+          if (dToSegment < hitRadius) {
+            sliceItem(item, projX, projY, angle);
+          }
+        });
       }
-      lastPointerPosRef.current = { x: clientX, y: clientY };
 
-      const points = trailPointsRef.current;
-      if (points.length < 2) return;
-
-      const p1 = points[points.length - 2];
-      const p2 = points[points.length - 1];
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const segLenSq = dx * dx + dy * dy;
-      if (segLenSq === 0) return;
-
-      const sliceAngleRad = Math.atan2(dy, dx);
-      const hitRadius = 30; // Radius for circle hit check
-
-      // Check all active unsliced items
-      for (const item of activeItemsRef.current) {
-        if (item.isSliced || item.isRemoved) continue;
-
-        const ix = item.x + 25;
-        const iy = item.y + 35;
-
-        // Project center onto line segment
-        const t = Math.max(0, Math.min(1, ((ix - p1.x) * dx + (iy - p1.y) * dy) / segLenSq));
-        const projX = p1.x + t * dx;
-        const projY = p1.y + t * dy;
-
-        const distSq = (ix - projX) * (ix - projX) + (iy - projY) * (iy - projY);
-
-        if (distSq <= hitRadius * hitRadius) {
-          sliceItem(item, projX, projY, sliceAngleRad);
-        }
-      }
+      lastPointerPosRef.current = { x, y };
     },
     [gameState, sliceItem]
   );
 
+  const handlePointerStart = useCallback((x: number, y: number) => {
+    isPointerDownRef.current = true;
+    trailFadeStartTimeRef.current = null;
+    currentSwipeSlicedCountRef.current = 0;
+    trailPointsRef.current = [{ x, y, time: performance.now() }];
+    lastPointerPosRef.current = { x, y };
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (x: number, y: number) => {
+      if (isPointerDownRef.current) {
+        handlePointerMovement(x, y);
+      }
+    },
+    [handlePointerMovement]
+  );
+
+  const handlePointerEnd = useCallback(() => {
+    isPointerDownRef.current = false;
+    trailFadeStartTimeRef.current = performance.now();
+    lastPointerPosRef.current = null;
+  }, []);
+
   // -------------------------------------------------------------
-  // 11. MAIN RAF GAME LOOP (PHYSICS, CANVAS BLADE, CLEANUP)
+  // 11. ATTACH NON-PASSIVE TOUCH LISTENERS TO KILL SAFARI SCROLL
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const rect = container.getBoundingClientRect();
+        handlePointerStart(touch.clientX - rect.left, touch.clientY - rect.top);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault(); // Prevents Safari bounce, scroll, pull-to-refresh
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const rect = container.getBoundingClientRect();
+        handlePointerMove(touch.clientX - rect.left, touch.clientY - rect.top);
+      }
+    };
+
+    const onTouchEnd = () => {
+      handlePointerEnd();
+    };
+
+    const onTouchCancel = () => {
+      handlePointerEnd();
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: false });
+    container.addEventListener('touchcancel', onTouchCancel, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, [handlePointerStart, handlePointerMove, handlePointerEnd]);
+
+  // Desktop Mouse Handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    handlePointerStart(e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    handlePointerMove(e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const handleMouseUp = () => {
+    handlePointerEnd();
+  };
+
+  // -------------------------------------------------------------
+  // 12. GAME LOOP (PHYSICS, CANVAS, HUD) VIA requestAnimationFrame
   // -------------------------------------------------------------
   useEffect(() => {
     if (gameState !== 'playing' && gameState !== 'times_up') {
@@ -855,7 +1082,7 @@ export default function SipSlicePage() {
     }
 
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
 
     const updateLoop = (frameTime: number) => {
       const dt = Math.min((frameTime - lastFrameTimeRef.current) / 1000, 0.05);
@@ -863,7 +1090,7 @@ export default function SipSlicePage() {
 
       const gameElapsed = frameTime - gameStartTimeRef.current - pausedTimeElapsedRef.current;
 
-      // 1. Update Game Timer & Warnings
+      // 1. Timer Countdown
       if (gameState === 'playing') {
         const remaining = Math.max(0, 30 - gameElapsed / 1000);
         const secCeil = Math.ceil(remaining);
@@ -883,77 +1110,108 @@ export default function SipSlicePage() {
         }
       }
 
-      // 2. Update Active Items Physics
+      // 2. Update Active Items Physics in Portrait
       if (gameState === 'playing') {
         const screenHeight = window.innerHeight;
         activeItemsRef.current.forEach((it) => {
-          if (it.isSliced || it.isRemoved) return;
+          if (it.isSliced || it.isRemoved) {
+            it.isActive = false;
+            return;
+          }
 
           const itemElapsed = (gameElapsed - it.appearAtMs) / 1000;
           if (itemElapsed < 0) {
+            it.isActive = false;
             it.y = screenHeight + 90;
             return;
           }
 
           if (itemElapsed > it.flightDuration) {
             it.isRemoved = true;
+            it.isActive = false;
             return;
           }
 
+          it.isActive = true;
           it.x = it.startX + it.vx * itemElapsed;
           it.y = it.startY + it.vy0 * itemElapsed + 0.5 * it.gravity * itemElapsed * itemElapsed;
           it.rotation = it.initialRot + it.rotSpeed * itemElapsed;
         });
       }
 
-      // 3. Update Item Halves
-      itemHalvesRef.current = itemHalvesRef.current.filter((half) => {
+      // 3. Update Item Halves from Pool
+      itemHalvesPoolRef.current.forEach((half) => {
+        if (!half.active) return;
         const age = (frameTime - half.createdAt) / 1000;
-        if (age > 0.65) return false;
+        if (age > 0.65) {
+          half.active = false;
+          return;
+        }
 
         half.x += half.vx * dt;
         half.y += half.vy * dt + 0.5 * 1100 * dt * dt;
         half.vy += 1100 * dt;
         half.rot += half.rotSpeed * dt;
-        return true;
+        half.opacity = Math.max(0, 1 - age / 0.65);
       });
 
-      // 4. Update Juice Droplets
-      juiceDropletsRef.current = juiceDropletsRef.current.filter((d) => {
+      // 4. Update Juice Droplets from Pool
+      juiceDropletsPoolRef.current.forEach((d) => {
+        if (!d.active) return;
         const age = (frameTime - d.createdAt) / 1000;
-        if (age > 0.55) return false;
+        if (age > 0.55) {
+          d.active = false;
+          return;
+        }
 
         d.x += d.vx * dt;
-        d.y += d.vy * dt + 0.5 * 800 * dt * dt;
-        d.vy += 800 * dt;
-        return true;
+        d.y += d.vy * dt + 0.5 * 850 * dt * dt;
+        d.vy += 850 * dt;
+        d.opacity = Math.max(0, 1 - age / 0.55);
       });
 
-      // 5. Clean up Juice Splats (accumulate for 3s then fade)
-      juiceSplatsRef.current = juiceSplatsRef.current.filter((s) => {
-        return frameTime - s.createdAt < 3500;
+      // 5. Update Juice Splats from Pool (fade after 2.5s)
+      juiceSplatsPoolRef.current.forEach((s) => {
+        if (!s.active) return;
+        const ageMs = frameTime - s.createdAt;
+        if (ageMs > 3500) {
+          s.active = false;
+          return;
+        }
+        s.opacity = ageMs > 2000 ? Math.max(0, 1 - (ageMs - 2000) / 1500) : 1;
       });
 
-      // 6. Clean up Score Pops
-      scorePopsRef.current = scorePopsRef.current.filter((p) => {
-        return frameTime - p.createdAt < 550;
+      // 6. Update Score Pops from Pool
+      scorePopsPoolRef.current.forEach((p) => {
+        if (!p.active) return;
+        const age = (frameTime - p.createdAt) / 1000;
+        if (age > 0.55) {
+          p.active = false;
+          return;
+        }
+        p.opacity = Math.max(0, 1 - age / 0.55);
       });
 
-      // 7. Clean up Bomb Explosions (300ms)
-      bombExplosionsRef.current = bombExplosionsRef.current.filter((b) => {
-        return frameTime - b.createdAt < 350;
+      // 7. Update Bomb Explosions from Pool (300ms)
+      bombExplosionsPoolRef.current.forEach((b) => {
+        if (!b.active) return;
+        const ageMs = frameTime - b.createdAt;
+        if (ageMs > 300) {
+          b.active = false;
+          return;
+        }
+        b.scale = Math.min(1.5, (ageMs / 100) * 1.5);
+        b.opacity = Math.max(0, 1 - ageMs / 300);
       });
 
-      // 8. Draw Canvas Blade Trail (Tapered 8px -> 0.5px, smooth curves, glowing shadow)
+      // 8. Draw Canvas Blade Trail (Full Screen Overlay)
       if (ctx && canvas) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-        // Keep last 20 points
         if (trailPointsRef.current.length > 20) {
           trailPointsRef.current = trailPointsRef.current.slice(-20);
         }
 
-        // Fade trail over 150ms if pointer released
         let trailOpacity = 1;
         if (trailFadeStartTimeRef.current !== null) {
           const fadeAge = frameTime - trailFadeStartTimeRef.current;
@@ -981,8 +1239,7 @@ export default function SipSlicePage() {
 
             // Tapered: 0.5px at tail -> 8px at finger
             ctx.lineWidth = 0.5 + progress * 7.5;
-
-            ctx.shadowColor = 'rgba(200, 220, 255, 0.9)';
+            ctx.shadowColor = 'rgba(200, 225, 255, 0.9)';
             ctx.shadowBlur = 8;
             ctx.strokeStyle = `rgba(255, 255, 255, ${(0.2 + progress * 0.8) * trailOpacity})`;
             ctx.stroke();
@@ -993,7 +1250,7 @@ export default function SipSlicePage() {
           ctx.beginPath();
           ctx.arc(tip.x, tip.y, 4, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255, 255, 255, ${trailOpacity})`;
-          ctx.shadowColor = 'rgba(215, 235, 255, 1)';
+          ctx.shadowColor = 'rgba(220, 240, 255, 1)';
           ctx.shadowBlur = 10;
           ctx.fill();
 
@@ -1015,7 +1272,7 @@ export default function SipSlicePage() {
   }, [gameState, completeGame]);
 
   // -------------------------------------------------------------
-  // 12. TAB BACKGROUNDING & PAUSE HANDLING
+  // 13. TAB BACKGROUNDING & PAUSE HANDLING
   // -------------------------------------------------------------
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1045,74 +1302,11 @@ export default function SipSlicePage() {
   };
 
   // -------------------------------------------------------------
-  // 13. TOUCH & MOUSE INPUT BINDINGS WITH ROTATION FALLBACK
-  // -------------------------------------------------------------
-  // iOS Safari touch coordinate mapping if container is rotated 90deg in portrait mode
-  const getMappedCoordinates = (clientX: number, clientY: number) => {
-    if (!isPortrait) return { x: clientX, y: clientY };
-    // Swapped coordinates for 90deg CSS rotation
-    return {
-      x: clientY,
-      y: window.innerWidth - clientX,
-    };
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    initAudioContext();
-    isPointerDownRef.current = true;
-    trailFadeStartTimeRef.current = null;
-    currentSwipeSlicedCountRef.current = 0;
-    const touch = e.touches[0];
-    if (touch) {
-      const { x, y } = getMappedCoordinates(touch.clientX, touch.clientY);
-      trailPointsRef.current = [{ x, y, time: performance.now() }];
-      lastPointerPosRef.current = { x, y };
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    if (touch) {
-      const { x, y } = getMappedCoordinates(touch.clientX, touch.clientY);
-      handlePointerMovement(x, y);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    isPointerDownRef.current = false;
-    trailFadeStartTimeRef.current = performance.now();
-    lastPointerPosRef.current = null;
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    initAudioContext();
-    isPointerDownRef.current = true;
-    trailFadeStartTimeRef.current = null;
-    currentSwipeSlicedCountRef.current = 0;
-    const { x, y } = getMappedCoordinates(e.clientX, e.clientY);
-    trailPointsRef.current = [{ x, y, time: performance.now() }];
-    lastPointerPosRef.current = { x, y };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPointerDownRef.current) {
-      const { x, y } = getMappedCoordinates(e.clientX, e.clientY);
-      handlePointerMovement(x, y);
-    }
-  };
-
-  const handleMouseUp = () => {
-    isPointerDownRef.current = false;
-    trailFadeStartTimeRef.current = performance.now();
-    lastPointerPosRef.current = null;
-  };
-
-  // -------------------------------------------------------------
   // 14. WOODEN CUTTING BOARD BACKGROUND
   // -------------------------------------------------------------
   const renderWoodenBoard = () => (
     <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
-      {/* 4 alternating vertical wood planks */}
+      {/* Alternating vertical wood planks */}
       <div
         className="absolute inset-0"
         style={{
@@ -1153,12 +1347,12 @@ export default function SipSlicePage() {
         }}
       />
 
-      {/* Decorative Pre-drawn Diagonal Slash Marks */}
+      {/* Decorative Pre-drawn Slash Marks on Board */}
       <svg className="absolute inset-0 w-full h-full opacity-40 overflow-visible">
         <line
-          x1="16%"
+          x1="18%"
           y1="22%"
-          x2="28%"
+          x2="32%"
           y2="38%"
           stroke="#1E120A"
           strokeWidth="2.5"
@@ -1166,9 +1360,9 @@ export default function SipSlicePage() {
           filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
         />
         <line
-          x1="68%"
+          x1="65%"
           y1="16%"
-          x2="82%"
+          x2="80%"
           y2="34%"
           stroke="#1E120A"
           strokeWidth="2"
@@ -1186,9 +1380,9 @@ export default function SipSlicePage() {
           filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
         />
         <line
-          x1="80%"
+          x1="78%"
           y1="64%"
-          x2="92%"
+          x2="90%"
           y2="82%"
           stroke="#1E120A"
           strokeWidth="2"
@@ -1198,30 +1392,10 @@ export default function SipSlicePage() {
         <line
           x1="12%"
           y1="68%"
-          x2="24%"
+          x2="26%"
           y2="84%"
           stroke="#1E120A"
           strokeWidth="2.5"
-          strokeLinecap="round"
-          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
-        />
-        <line
-          x1="52%"
-          y1="18%"
-          x2="64%"
-          y2="36%"
-          stroke="#1E120A"
-          strokeWidth="2"
-          strokeLinecap="round"
-          filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
-        />
-        <line
-          x1="28%"
-          y1="42%"
-          x2="42%"
-          y2="58%"
-          stroke="#1E120A"
-          strokeWidth="2.2"
           strokeLinecap="round"
           filter="drop-shadow(0 1px 1px rgba(255,255,255,0.08))"
         />
@@ -1230,47 +1404,11 @@ export default function SipSlicePage() {
   );
 
   // -------------------------------------------------------------
-  // RENDER: PORTRAIT ORIENTATION PROMPT OVERLAY
-  // -------------------------------------------------------------
-  if (isPortrait) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#2B170B] text-white p-6 text-center select-none">
-        <div className="relative w-28 h-28 mb-6 flex items-center justify-center animate-bounce">
-          <svg
-            className="w-20 h-20 text-[#FFE14D] animate-spin"
-            style={{ animationDuration: '3s' }}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-            <line x1="12" y1="18" x2="12.01" y2="18" />
-          </svg>
-        </div>
-
-        <h2 className="text-3xl font-extrabold font-anton tracking-wide text-[#FFE14D] mb-3">
-          Rotate your phone 📱
-        </h2>
-        <p className="text-gray-300 max-w-xs text-sm mb-6 leading-relaxed">
-          Sip Slice is played in landscape mode for the true Fruit Ninja experience. Turn your device sideways to play!
-        </p>
-
-        <div className="flex items-center gap-2 text-xs text-gray-400 bg-black/40 px-4 py-2 rounded-full">
-          <span>🔄</span> Turn device horizontally to continue
-        </div>
-      </div>
-    );
-  }
-
-  // -------------------------------------------------------------
   // RENDER: ALREADY PLAYED TODAY SCREEN
   // -------------------------------------------------------------
   if (gameState === 'already_played' && alreadyPlayedData) {
     return (
-      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center overflow-hidden select-none">
+      <div className="game-container flex items-center justify-center overflow-hidden select-none">
         {renderWoodenBoard()}
 
         <div className="relative z-10 bg-white/95 backdrop-blur-md rounded-[24px] p-7 max-w-sm w-full mx-4 text-center shadow-2xl border border-white/40">
@@ -1325,7 +1463,7 @@ export default function SipSlicePage() {
   // -------------------------------------------------------------
   if (gameState === 'start' || gameState === 'loading') {
     return (
-      <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center overflow-hidden select-none">
+      <div className="game-container flex flex-col items-center justify-center overflow-hidden select-none">
         {renderWoodenBoard()}
 
         <div className="relative z-10 flex flex-col items-center text-center p-6 max-w-md w-full">
@@ -1355,7 +1493,7 @@ export default function SipSlicePage() {
             disabled={gameState === 'loading'}
             className="w-56 py-3.5 bg-[#B92429] hover:bg-[#9E1B20] active:scale-95 text-white font-anton text-2xl tracking-widest rounded-2xl shadow-xl transition-transform animate-pulse flex items-center justify-center uppercase"
           >
-            {gameState === 'loading' ? 'LOADING...' : 'START'}
+            {gameState === 'loading' ? 'LOADING...' : 'PLAY'}
           </button>
 
           <Link
@@ -1374,7 +1512,7 @@ export default function SipSlicePage() {
   // -------------------------------------------------------------
   if (gameState === 'countdown') {
     return (
-      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center overflow-hidden select-none">
+      <div className="game-container flex items-center justify-center overflow-hidden select-none">
         {renderWoodenBoard()}
 
         <div
@@ -1393,63 +1531,52 @@ export default function SipSlicePage() {
   }
 
   // -------------------------------------------------------------
-  // RENDER: ACTIVE GAMEPLAY / PAUSED / RESULT
+  // RENDER: ACTIVE GAMEPLAY / PAUSED / RESULT (PORTRAIT)
   // -------------------------------------------------------------
   return (
     <div
       ref={containerRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      className={`fixed inset-0 w-screen h-screen overflow-hidden select-none touch-none cursor-crosshair ${
+      className={`game-container cursor-crosshair ${
         isShaking ? 'animate-[shake_0.05s_ease-in-out_infinite]' : ''
       }`}
-      style={{
-        WebkitTouchCallout: 'none',
-        userSelect: 'none',
-      }}
     >
       {/* 1. Wooden Cutting Board Background */}
       {renderWoodenBoard()}
 
-      {/* 2. Juice Splats on Board */}
-      {juiceSplatsRef.current.map((splat) => {
-        const ageMs = performance.now() - splat.createdAt;
-        const opacity = ageMs > 2000 ? Math.max(0, 1 - (ageMs - 2000) / 1500) : 1;
+      {/* 2. Juice Splats on Board (Pooled, translate3d GPU accelerated) */}
+      {juiceSplatsPoolRef.current.map((splat) => {
+        if (!splat.active) return null;
 
         return (
           <div
             key={splat.id}
-            className="absolute pointer-events-none transition-transform"
+            className="absolute top-0 left-0 pointer-events-none transition-transform"
             style={{
-              left: `${splat.x - splat.size / 2}px`,
-              top: `${splat.y - splat.size / 2}px`,
+              transform: `translate3d(${splat.x - splat.size / 2}px, ${splat.y - splat.size / 2}px, 0) rotate(${splat.rotation}deg)`,
               width: `${splat.size}px`,
               height: `${splat.size}px`,
               backgroundColor: splat.color,
               borderRadius: splat.borderRadius,
-              transform: `rotate(${splat.rotation}deg)`,
-              opacity,
+              opacity: splat.opacity,
             }}
           />
         );
       })}
 
-      {/* 3. Flying Active Fruits & Bombs */}
+      {/* 3. Flying Active Fruits & Bombs (Pre-allocated pool, translate3d, will-change: transform) */}
       {activeItemsRef.current.map((item) => {
-        if (item.isSliced || item.isRemoved) return null;
+        if (!item.isActive) return null;
 
         return (
           <div
             key={item.index}
-            className="absolute pointer-events-none will-change-transform"
+            className="absolute top-0 left-0 pointer-events-none"
             style={{
-              left: `${item.x}px`,
-              top: `${item.y}px`,
-              transform: `rotate(${item.rotation}deg)`,
+              transform: `translate3d(${item.x}px, ${item.y}px, 0) rotate(${item.rotation}deg)`,
+              willChange: 'transform',
             }}
           >
             <FruitGraphic type={item.type} />
@@ -1457,20 +1584,18 @@ export default function SipSlicePage() {
         );
       })}
 
-      {/* 4. Sliced Fruit Halves */}
-      {itemHalvesRef.current.map((half) => {
-        const age = (performance.now() - half.createdAt) / 1000;
-        const opacity = Math.max(0, 1 - age / 0.65);
+      {/* 4. Sliced Fruit Halves (Pre-allocated pool, translate3d) */}
+      {itemHalvesPoolRef.current.map((half) => {
+        if (!half.active) return null;
 
         return (
           <div
             key={half.id}
-            className="absolute pointer-events-none will-change-transform"
+            className="absolute top-0 left-0 pointer-events-none"
             style={{
-              left: `${half.x}px`,
-              top: `${half.y}px`,
-              transform: `rotate(${half.rot}deg)`,
-              opacity,
+              transform: `translate3d(${half.x}px, ${half.y}px, 0) rotate(${half.rot}deg)`,
+              opacity: half.opacity,
+              willChange: 'transform',
             }}
           >
             <FruitGraphic type={half.type} clipSide={half.side} />
@@ -1478,68 +1603,61 @@ export default function SipSlicePage() {
         );
       })}
 
-      {/* 5. Bomb Explosion Animations */}
-      {bombExplosionsRef.current.map((exp) => {
-        const ageMs = performance.now() - exp.createdAt;
-        const scale = Math.min(1, ageMs / 120);
-        const opacity = Math.max(0, 1 - ageMs / 300);
+      {/* 5. Bomb Explosion Animations (Pre-allocated pool) */}
+      {bombExplosionsPoolRef.current.map((exp) => {
+        if (!exp.active) return null;
 
         return (
           <div
             key={exp.id}
-            className="absolute pointer-events-none z-30"
+            className="absolute top-0 left-0 pointer-events-none z-30"
             style={{
-              left: `${exp.x - 100}px`,
-              top: `${exp.y - 100}px`,
+              transform: `translate3d(${exp.x - 100}px, ${exp.y - 100}px, 0) scale(${exp.scale})`,
               width: '200px',
               height: '200px',
-              opacity,
-              transform: `scale(${scale * 1.5})`,
+              opacity: exp.opacity,
               background: 'radial-gradient(circle, #FF4500 0%, #FF8C00 45%, transparent 70%)',
+              willChange: 'transform, opacity',
             }}
           />
         );
       })}
 
-      {/* 6. 3D Juice Droplets */}
-      {juiceDropletsRef.current.map((drop) => {
-        const age = (performance.now() - drop.createdAt) / 1000;
-        const opacity = Math.max(0, 1 - age / 0.55);
+      {/* 6. Juice Droplets (Pre-allocated pool, translate3d) */}
+      {juiceDropletsPoolRef.current.map((drop) => {
+        if (!drop.active) return null;
 
         return (
           <div
             key={drop.id}
-            className="absolute pointer-events-none rounded-full will-change-transform"
+            className="absolute top-0 left-0 pointer-events-none rounded-full"
             style={{
-              left: `${drop.x - drop.size / 2}px`,
-              top: `${drop.y - drop.size / 2}px`,
+              transform: `translate3d(${drop.x - drop.size / 2}px, ${drop.y - drop.size / 2}px, 0)`,
               width: `${drop.size}px`,
               height: `${drop.size}px`,
               background: `radial-gradient(circle at 35% 35%, ${drop.lightColor}, ${drop.color} 70%, ${drop.darkColor} 100%)`,
-              opacity,
+              opacity: drop.opacity,
+              willChange: 'transform',
             }}
           />
         );
       })}
 
-      {/* 7. Score Pop-ups */}
-      {scorePopsRef.current.map((pop) => {
-        const age = (performance.now() - pop.createdAt) / 1000;
-        const opacity = Math.max(0, 1 - age / 0.55);
-        const floatY = age * 90;
+      {/* 7. Score Pop-ups (Pre-allocated pool, translate3d) */}
+      {scorePopsPoolRef.current.map((pop) => {
+        if (!pop.active) return null;
 
         return (
           <div
             key={pop.id}
-            className="absolute pointer-events-none font-anton tracking-wide select-none will-change-transform z-40"
+            className="absolute top-0 left-0 pointer-events-none font-anton tracking-wide select-none z-40"
             style={{
-              left: `${pop.x}px`,
-              top: `${pop.y - floatY}px`,
+              transform: `translate3d(${pop.x}px, ${pop.y}px, 0) translate(-50%, -50%)`,
               fontSize: `${pop.fontSize}px`,
               color: pop.color,
-              opacity,
+              opacity: pop.opacity,
               textShadow: '0 2px 8px rgba(0,0,0,0.85)',
-              transform: 'translate(-50%, -50%)',
+              willChange: 'transform, opacity',
             }}
           >
             {pop.text}
@@ -1547,29 +1665,40 @@ export default function SipSlicePage() {
         );
       })}
 
-      {/* 8. Canvas Blade Trail (Overlay) */}
+      {/* 8. Canvas Blade Trail (Full Screen Overlay) */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 pointer-events-none w-full h-full z-20"
       />
 
-      {/* 9. HUD: Score (Top-Left 🍍 XX) & Timer (Top-Right 0:XX) & Pause (Bottom-Left ⏸) */}
-      <div className="absolute inset-x-0 top-0 p-4 flex justify-between items-center pointer-events-none z-30">
-        {/* Score Top-Left: "🍍 XX" format */}
-        <div className="flex items-center gap-2 bg-black/45 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20">
-          <span className="text-2xl">🍍</span>
+      {/* 9. PORTRAIT HUD: Score Top-Left, Pause Top-Center, Timer Top-Right */}
+      <div className="absolute inset-x-0 top-0 pt-4 px-4 flex justify-between items-center pointer-events-none z-30">
+        {/* Score Top-Left: "🍍 XX" in gold Anton, 28px */}
+        <div className="flex items-center gap-2 bg-black/45 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20">
+          <span className="text-xl">🍍</span>
           <span
-            className="text-3xl font-anton text-[#FFC93C] tracking-wide"
+            className="text-[28px] font-anton text-[#FFC93C] tracking-wide leading-none"
             style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
           >
             {score}
           </span>
         </div>
 
-        {/* Timer Top-Right: "0:XX", turns red in last 5 seconds */}
-        <div className="bg-black/45 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20">
+        {/* Pause Button Top-Center */}
+        <div className="pointer-events-auto">
+          <button
+            onClick={handlePause}
+            className="w-10 h-10 rounded-full bg-black/45 border border-white/25 flex items-center justify-center text-white hover:bg-black/60 active:scale-95 transition-transform"
+            aria-label="Pause Game"
+          >
+            <span className="text-sm">⏸</span>
+          </button>
+        </div>
+
+        {/* Timer Top-Right: "0:XX" in gold Anton, 28px, red in last 5 seconds */}
+        <div className="bg-black/45 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20">
           <span
-            className={`text-3xl font-anton tracking-widest ${
+            className={`text-[28px] font-anton tracking-widest leading-none ${
               timeLeft <= 5 ? 'text-[#FF3B30] animate-pulse' : 'text-[#FFC93C]'
             }`}
             style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
@@ -1577,17 +1706,6 @@ export default function SipSlicePage() {
             0:{timeLeft.toString().padStart(2, '0')}
           </span>
         </div>
-      </div>
-
-      {/* Pause Button Bottom-Left */}
-      <div className="absolute bottom-4 left-4 z-30 pointer-events-auto">
-        <button
-          onClick={handlePause}
-          className="w-10 h-10 rounded-full bg-black/45 border border-white/25 flex items-center justify-center text-white hover:bg-black/60 active:scale-95 transition-transform"
-          aria-label="Pause Game"
-        >
-          <span className="text-lg">⏸</span>
-        </button>
       </div>
 
       {/* 10. Combo Banner */}
